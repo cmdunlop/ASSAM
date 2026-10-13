@@ -1,0 +1,50 @@
+﻿# 8051（MCS-51）指令資料
+# 格式：助憶碼 | 分類 | 影響旗標 | 語法 | 說明 | 動作樣板
+@arch i8051
+@name 8051（MCS-51）
+
+MOV | 資料搬移 | P（目的為 A 時） | MOV dest, src | 搬移資料。#data 代表立即值；Rn 為 R0~R7；@Ri 為間接定址（只能用 R0、R1）；沒有 # 的數字是內部 RAM／SFR 的直接位址；也可 MOV C, bit、MOV bit, C、MOV DPTR, #data16。 | {0} ← {1}
+MOVC | 資料搬移 | P | MOVC A, @A+DPTR | 讀取程式記憶體（ROM）中的資料，常用來查表（例如七段顯示器字型碼表）。 | {0} ← 程式記憶體[{1}]
+MOVX | 資料搬移 | P（目的為 A 時） | MOVX A, @DPTR | 存取外部資料記憶體（XRAM），透過 @DPTR 或 @Ri。 | {0} ← {1}（外部記憶體）
+PUSH | 堆疊 | 無 | PUSH direct | SP 先加 1，再把 direct 的內容存到 SP 指向的位置（8051 的堆疊往高位址成長，SP 預設為 07h）。 | SP ← SP + 1；[SP] ← {0}
+POP | 堆疊 | 無 | POP direct | 把 SP 指向的內容放到 direct，SP 再減 1。 | {0} ← [SP]；SP ← SP - 1
+XCH | 資料搬移 | P | XCH A, src | A 與 src 交換。 | {0} ↔ {1}
+XCHD | 資料搬移 | P | XCHD A, @Ri | A 與 @Ri 交換低 4 位元。 | {0} 低 4 位元 ↔ {1} 低 4 位元
+ADD | 算術 | CY AC OV P | ADD A, src | A = A + src。 | {0} ← {0} + {1}
+ADDC | 算術 | CY AC OV P | ADDC A, src | 帶進位加法：A = A + src + CY，用於多位元組加法。 | {0} ← {0} + {1} + CY
+SUBB | 算術 | CY AC OV P | SUBB A, src | 帶借位減法：A = A - src - CY。8051 沒有不帶借位的減法，所以使用前常先 CLR C。 | {0} ← {0} - {1} - CY
+INC | 算術 | P（A 時） | INC dest | dest 加 1（不影響 CY）；INC DPTR 是 16 位元加 1。 | {0} ← {0} + 1
+DEC | 算術 | P（A 時） | DEC dest | dest 減 1（不影響 CY）。 | {0} ← {0} - 1
+MUL | 算術 | CY=0 OV P | MUL AB | A × B，16 位元乘積的低位元組放 A、高位元組放 B；乘積大於 255 時 OV=1。 | B:A ← A × B
+DIV | 算術 | CY=0 OV P | DIV AB | A ÷ B：商放 A、餘數放 B；B=0 時 OV=1。常用來拆十位數與個位數（B=10）。 | A ← A ÷ B 的商；B ← 餘數
+DA | 算術 | CY | DA A | 十進位調整：把 BCD 加法後的 A 調整成正確的 BCD 數。 | A ← BCD 調整(A)
+ANL | 邏輯 | P（A 時）、CY（位元時） | ANL dest, src | 邏輯 AND；常用來清除位元，例如 ANL P1, #0F0h 清除 P1 低 4 位元。 | {0} ← {0} AND {1}
+ORL | 邏輯 | P（A 時）、CY（位元時） | ORL dest, src | 邏輯 OR；常用來設定位元。 | {0} ← {0} OR {1}
+XRL | 邏輯 | P（A 時） | XRL dest, src | 邏輯 XOR；常用來反相位元。 | {0} ← {0} XOR {1}
+CLR | 邏輯/位元 | P／CY | CLR A ／ CLR bit | 把 A 或某個位元清為 0，例如 CLR P1.0、CLR C。 | {0} ← 0
+SETB | 位元 | CY（目的為 C 時） | SETB bit | 把位元設為 1，例如 SETB P1.0、SETB TR0（啟動計時器 0）、SETB EA（開總中斷）。 | {0} ← 1
+CPL | 邏輯/位元 | P／CY | CPL A ／ CPL bit | A 或位元反相，CPL P1.0 常用來讓 LED 閃爍。 | {0} ← NOT {0}
+RL | 旋轉 | P | RL A | A 循環左移 1 位元（不經過 CY），常用來做跑馬燈。 | A ← 循環左移(A)
+RR | 旋轉 | P | RR A | A 循環右移 1 位元（不經過 CY）。 | A ← 循環右移(A)
+RLC | 旋轉 | CY P | RLC A | A 連同 CY 一起循環左移（9 位元旋轉）。 | CY:A ← 循環左移(CY:A)
+RRC | 旋轉 | CY P | RRC A | A 連同 CY 一起循環右移。 | A:CY ← 循環右移(A:CY)
+SWAP | 邏輯 | 無 | SWAP A | 交換 A 的高 4 位元與低 4 位元。 | A 高 4 位元 ↔ 低 4 位元
+JMP | 流程控制 | 無 | JMP label | 由組譯器自動選擇 SJMP/AJMP/LJMP；JMP @A+DPTR 為間接跳躍（跳躍表）。 | 跳到 {0}
+SJMP | 流程控制 | 無 | SJMP rel | 短跳躍（-128～+127 位元組）；SJMP $ 代表停在原地的無窮迴圈。 | 跳到 {0}
+AJMP | 流程控制 | 無 | AJMP addr11 | 在同一個 2KB 區塊內跳躍。 | 跳到 {0}
+LJMP | 流程控制 | 無 | LJMP addr16 | 在 64KB 範圍內任意跳躍。 | 跳到 {0}
+JZ | 條件跳躍 | 無 | JZ rel | A = 0 時跳躍（8051 沒有零旗標，直接檢查 A）。 | 若 A = 0 跳到 {0}
+JNZ | 條件跳躍 | 無 | JNZ rel | A ≠ 0 時跳躍。 | 若 A ≠ 0 跳到 {0}
+JC | 條件跳躍 | 無 | JC rel | CY = 1 時跳躍。 | 若 CY = 1 跳到 {0}
+JNC | 條件跳躍 | 無 | JNC rel | CY = 0 時跳躍。 | 若 CY = 0 跳到 {0}
+JB | 條件跳躍 | 無 | JB bit, rel | 位元 = 1 時跳躍，例如 JB P3.2, NO_KEY。 | 若 {0} = 1 跳到 {1}
+JNB | 條件跳躍 | 無 | JNB bit, rel | 位元 = 0 時跳躍；常用於偵測按鍵按下（低電位）或等待計時器溢位 JNB TF0, $。 | 若 {0} = 0 跳到 {1}
+JBC | 條件跳躍 | 無 | JBC bit, rel | 位元 = 1 時跳躍，並同時把該位元清為 0。 | 若 {0} = 1：{0} ← 0 並跳到 {1}
+CJNE | 條件跳躍 | CY | CJNE a, b, rel | 比較 a 與 b，不相等就跳躍；同時若 a < b 則 CY=1，可用來判斷大小。 | 若 {0} ≠ {1} 跳到 {2}（{0} < {1} 時 CY=1）
+DJNZ | 迴圈 | 無 | DJNZ Rn, rel | Rn（或直接位址）先減 1，結果不為 0 就跳躍；是 8051 最常用的迴圈與延遲指令（2 個機器週期）。 | {0} ← {0} - 1；若 {0} ≠ 0 跳到 {1}
+ACALL | 副程式 | 無 | ACALL addr11 | 在同一個 2KB 區塊內呼叫副程式，返回位址推入堆疊。 | 呼叫 {0}
+LCALL | 副程式 | 無 | LCALL addr16 | 在 64KB 範圍內呼叫副程式。 | 呼叫 {0}
+CALL | 副程式 | 無 | CALL label | 由組譯器自動選擇 ACALL 或 LCALL。 | 呼叫 {0}
+RET | 副程式 | 無 | RET | 從副程式返回（從堆疊取回返回位址）。 | 返回呼叫處
+RETI | 中斷 | 無 | RETI | 從中斷服務程式返回，並恢復中斷優先權邏輯。 | 從中斷返回
+NOP | 其他 | 無 | NOP | 不做事，耗用 1 個機器週期，可用來微調延遲時間。 | 不做事

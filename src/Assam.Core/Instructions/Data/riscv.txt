@@ -1,0 +1,67 @@
+﻿# RISC-V（RV32I/RV64I + M 擴充 + 常用虛擬指令）
+@arch riscv
+@name RISC-V
+
+ADD | 算術 | 無 | add rd, rs1, rs2 | rd = rs1 + rs2（RISC-V 沒有旗標暫存器，溢位不會被記錄）。 | {0} ← {1} + {2}
+ADDI | 算術 | 無 | addi rd, rs1, imm | rd = rs1 + 12 位元有號立即值。 | {0} ← {1} + {2}
+SUB | 算術 | 無 | sub rd, rs1, rs2 | rd = rs1 - rs2。 | {0} ← {1} - {2}
+LUI | 資料搬移 | 無 | lui rd, imm | 把 20 位元立即值放到 rd 的第 12～31 位元。 | {0} ← {1} << 12
+AUIPC | 資料搬移 | 無 | auipc rd, imm | rd = PC + (imm << 12)，用於產生 PC 相對位址。 | {0} ← PC + ({1} << 12)
+AND | 邏輯 | 無 | and rd, rs1, rs2 | 逐位元 AND。 | {0} ← {1} AND {2}
+ANDI | 邏輯 | 無 | andi rd, rs1, imm | 和立即值做 AND。 | {0} ← {1} AND {2}
+OR | 邏輯 | 無 | or rd, rs1, rs2 | 逐位元 OR。 | {0} ← {1} OR {2}
+ORI | 邏輯 | 無 | ori rd, rs1, imm | 和立即值做 OR。 | {0} ← {1} OR {2}
+XOR | 邏輯 | 無 | xor rd, rs1, rs2 | 逐位元 XOR。 | {0} ← {1} XOR {2}
+XORI | 邏輯 | 無 | xori rd, rs1, imm | 和立即值做 XOR；xori rd, rs, -1 等於 NOT。 | {0} ← {1} XOR {2}
+SLL | 移位 | 無 | sll rd, rs1, rs2 | 邏輯左移，位移量在 rs2。 | {0} ← {1} << {2}
+SLLI | 移位 | 無 | slli rd, rs1, shamt | 邏輯左移立即值位元數。 | {0} ← {1} << {2}
+SRL | 移位 | 無 | srl rd, rs1, rs2 | 邏輯右移。 | {0} ← {1} >> {2}（補 0）
+SRLI | 移位 | 無 | srli rd, rs1, shamt | 邏輯右移立即值位元數。 | {0} ← {1} >> {2}（補 0）
+SRA | 移位 | 無 | sra rd, rs1, rs2 | 算術右移。 | {0} ← {1} >> {2}（補符號位元）
+SRAI | 移位 | 無 | srai rd, rs1, shamt | 算術右移立即值位元數。 | {0} ← {1} >> {2}（補符號位元）
+SLT | 比較 | 無 | slt rd, rs1, rs2 | rs1 < rs2（有號）時 rd = 1，否則 0。 | {0} ← ({1} < {2}) ? 1 : 0
+SLTI | 比較 | 無 | slti rd, rs1, imm | rs1 < imm（有號）時 rd = 1。 | {0} ← ({1} < {2}) ? 1 : 0
+SLTU | 比較 | 無 | sltu rd, rs1, rs2 | 無號比較。 | {0} ← ({1} < {2}，無號) ? 1 : 0
+SLTIU | 比較 | 無 | sltiu rd, rs1, imm | 無號比較立即值；sltiu rd, rs, 1 等於 seqz。 | {0} ← ({1} < {2}，無號) ? 1 : 0
+MUL | 算術(M) | 無 | mul rd, rs1, rs2 | 乘法取低位（需要 M 擴充）。 | {0} ← {1} × {2}
+MULH | 算術(M) | 無 | mulh rd, rs1, rs2 | 有號乘法取高位。 | {0} ← ({1} × {2}) 的高位
+DIV | 算術(M) | 無 | div rd, rs1, rs2 | 有號除法（除以 0 結果為 -1，不會產生例外）。 | {0} ← {1} ÷ {2}
+DIVU | 算術(M) | 無 | divu rd, rs1, rs2 | 無號除法。 | {0} ← {1} ÷ {2}（無號）
+REM | 算術(M) | 無 | rem rd, rs1, rs2 | 有號餘數。 | {0} ← {1} mod {2}
+REMU | 算術(M) | 無 | remu rd, rs1, rs2 | 無號餘數。 | {0} ← {1} mod {2}（無號）
+LW | 載入/儲存 | 無 | lw rd, offset(rs1) | 從 rs1 + offset 載入 32 位元。 | {0} ← 記憶體[{1}]
+LH | 載入/儲存 | 無 | lh rd, offset(rs1) | 載入 16 位元並符號延伸。 | {0} ← 符號延伸(半字組[{1}])
+LHU | 載入/儲存 | 無 | lhu rd, offset(rs1) | 載入 16 位元並零延伸。 | {0} ← 半字組[{1}]
+LB | 載入/儲存 | 無 | lb rd, offset(rs1) | 載入 8 位元並符號延伸。 | {0} ← 符號延伸(位元組[{1}])
+LBU | 載入/儲存 | 無 | lbu rd, offset(rs1) | 載入 8 位元並零延伸。 | {0} ← 位元組[{1}]
+LD | 載入/儲存 | 無 | ld rd, offset(rs1) | （RV64）載入 64 位元。 | {0} ← 記憶體64[{1}]
+SW | 載入/儲存 | 無 | sw rs2, offset(rs1) | 把 rs2 的 32 位元存到 rs1 + offset。 | 記憶體[{1}] ← {0}
+SH | 載入/儲存 | 無 | sh rs2, offset(rs1) | 存低 16 位元。 | 半字組[{1}] ← {0}
+SB | 載入/儲存 | 無 | sb rs2, offset(rs1) | 存低 8 位元。 | 位元組[{1}] ← {0}
+SD | 載入/儲存 | 無 | sd rs2, offset(rs1) | （RV64）存 64 位元。 | 記憶體64[{1}] ← {0}
+BEQ | 條件跳躍 | 無 | beq rs1, rs2, label | rs1 = rs2 時跳躍。 | 若 {0} = {1} 跳到 {2}
+BNE | 條件跳躍 | 無 | bne rs1, rs2, label | rs1 ≠ rs2 時跳躍。 | 若 {0} ≠ {1} 跳到 {2}
+BLT | 條件跳躍 | 無 | blt rs1, rs2, label | rs1 < rs2（有號）時跳躍。 | 若 {0} < {1} 跳到 {2}
+BGE | 條件跳躍 | 無 | bge rs1, rs2, label | rs1 ≥ rs2（有號）時跳躍。 | 若 {0} ≥ {1} 跳到 {2}
+BLTU | 條件跳躍 | 無 | bltu rs1, rs2, label | 無號小於時跳躍。 | 若 {0} < {1}（無號）跳到 {2}
+BGEU | 條件跳躍 | 無 | bgeu rs1, rs2, label | 無號大於等於時跳躍。 | 若 {0} ≥ {1}（無號）跳到 {2}
+BGT | 虛擬指令 | 無 | bgt rs1, rs2, label | rs1 > rs2 時跳躍（展開成 blt rs2, rs1）。 | 若 {0} > {1} 跳到 {2}
+BLE | 虛擬指令 | 無 | ble rs1, rs2, label | rs1 ≤ rs2 時跳躍。 | 若 {0} ≤ {1} 跳到 {2}
+BEQZ | 虛擬指令 | 無 | beqz rs, label | rs = 0 時跳躍。 | 若 {0} = 0 跳到 {1}
+BNEZ | 虛擬指令 | 無 | bnez rs, label | rs ≠ 0 時跳躍。 | 若 {0} ≠ 0 跳到 {1}
+JAL | 副程式 | 無 | jal rd, label | 返回位址存入 rd 並跳躍；只寫 jal label 時 rd 預設為 ra。 | 2:{0} ← 返回位址；跳到 {1} || 1:ra ← 返回位址；跳到 {0}
+JALR | 副程式 | 無 | jalr rd, offset(rs1) | 跳到 rs1 + offset，返回位址存入 rd。 | 跳到 {1}，返回位址存入 {0}
+J | 虛擬指令 | 無 | j label | 無條件跳躍（jal x0, label）。 | 跳到 {0}
+JR | 虛擬指令 | 無 | jr rs | 跳到暫存器中的位址。 | 跳到 {0}
+RET | 虛擬指令 | 無 | ret | 函式返回（jalr x0, 0(ra)）。 | 返回（跳到 ra）
+CALL | 虛擬指令 | 無 | call label | 呼叫函式（返回位址存入 ra）。 | ra ← 返回位址；跳到 {0}
+LI | 虛擬指令 | 無 | li rd, imm | 載入立即值。 | {0} ← {1}
+LA | 虛擬指令 | 無 | la rd, label | 載入標籤位址。 | {0} ← 位址({1})
+MV | 虛擬指令 | 無 | mv rd, rs | 複製暫存器（addi rd, rs, 0）。 | {0} ← {1}
+NOT | 虛擬指令 | 無 | not rd, rs | 逐位元取反（xori rd, rs, -1）。 | {0} ← NOT {1}
+NEG | 虛擬指令 | 無 | neg rd, rs | 變號（sub rd, x0, rs）。 | {0} ← -{1}
+SEQZ | 虛擬指令 | 無 | seqz rd, rs | rs = 0 時 rd = 1。 | {0} ← ({1} = 0) ? 1 : 0
+SNEZ | 虛擬指令 | 無 | snez rd, rs | rs ≠ 0 時 rd = 1。 | {0} ← ({1} ≠ 0) ? 1 : 0
+NOP | 虛擬指令 | 無 | nop | 不做事（addi x0, x0, 0）。 | 不做事
+ECALL | 系統呼叫 | 無 | ecall | 系統呼叫：a7 放呼叫號碼（RARS：1 印整數、4 印字串、10 結束；Linux：64 write、93 exit），參數放 a0～a5。 | 系統呼叫（a7 = 號碼）
+EBREAK | 系統 | 無 | ebreak | 中斷點。 | 中斷點

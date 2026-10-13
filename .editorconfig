@@ -1,0 +1,17 @@
+root = true
+
+[*]
+indent_style = space
+end_of_line = crlf
+insert_final_newline = true
+
+[*.cs]
+indent_size = 4
+# 中文 Windows 上的 Visual Studio 2019 需要 BOM 才能確保以 UTF-8 開啟（避免被當成 Big5）
+charset = utf-8-bom
+
+[*.{csproj,config,manifest,xml}]
+indent_size = 2
+
+[src/Assam.Core/{Knowledge,Instructions}/Data/*]
+charset = utf-8-bom

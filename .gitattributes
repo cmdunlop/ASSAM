@@ -1,0 +1,11 @@
+# 文字檔一律正規化；Windows 取出時使用 CRLF（Visual Studio 預設）
+* text=auto
+*.cs      text eol=crlf
+*.csproj  text eol=crlf
+*.sln     text eol=crlf
+*.config  text eol=crlf
+*.manifest text eol=crlf
+*.md      text eol=crlf
+*.txt     text eol=crlf
+*.png     binary
+*.ico     binary

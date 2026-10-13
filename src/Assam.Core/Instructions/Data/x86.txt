@@ -1,0 +1,184 @@
+﻿# x86 / x86-64 指令資料（Intel 語法）
+# 格式：助憶碼(同義以 / 分隔) | 分類 | 影響旗標 | 語法 | 說明 | 動作樣板（{0}{1}{2} 代表運算元；"n:" 前綴代表 n 個運算元時使用）
+# 可以自行新增或修改，重新編譯後生效。
+@arch x86
+@name x86 / x86-64
+
+# ===== 資料搬移 =====
+MOV | 資料搬移 | 無 | MOV dest, src | 把 src 的值複製到 dest。兩個運算元大小必須相同，且不能同時是記憶體；不能把立即值直接放入區段暫存器。 | {0} ← {1}
+MOVZX | 資料搬移 | 無 | MOVZX dest, src | 零延伸搬移：把較小的無號數 src（8/16 位元）放進較大的暫存器 dest，高位元補 0。 | {0} ← 零延伸({1})
+MOVSX | 資料搬移 | 無 | MOVSX dest, src | 符號延伸搬移：把較小的有號數 src 放進較大的暫存器 dest，高位元補上 src 的符號位元。 | {0} ← 符號延伸({1})
+MOVSXD | 資料搬移 | 無 | MOVSXD r64, r/m32 | x64：把 32 位元有號數符號延伸成 64 位元。 | {0} ← 符號延伸({1})
+XCHG | 資料搬移 | 無 | XCHG op1, op2 | 交換兩個運算元的內容（至少一個必須是暫存器）。 | {0} ↔ {1}
+LEA | 資料搬移 | 無 | LEA reg, mem | 載入有效位址：計算記憶體運算元的「位址」放進暫存器，並不會讀取記憶體；也常用來做快速的加法與乘法（例如 LEA EAX, [EBX+EBX*4] 得到 EBX×5）。 | {0} ← 位址({1})
+BSWAP | 資料搬移 | 無 | BSWAP reg32 | 反轉 32/64 位元暫存器的位元組順序（大小端互換）。 | {0} ← 位元組反轉({0})
+CBW | 型態轉換 | 無 | CBW | 把 AL 符號延伸到 AX。 | AX ← 符號延伸(AL)
+CWDE | 型態轉換 | 無 | CWDE | 把 AX 符號延伸到 EAX。 | EAX ← 符號延伸(AX)
+CDQE | 型態轉換 | 無 | CDQE | x64：把 EAX 符號延伸到 RAX。 | RAX ← 符號延伸(EAX)
+CWD | 型態轉換 | 無 | CWD | 把 AX 符號延伸到 DX:AX（16 位元 IDIV 之前使用）。 | DX:AX ← 符號延伸(AX)
+CDQ | 型態轉換 | 無 | CDQ | 把 EAX 符號延伸到 EDX:EAX，通常放在 IDIV 之前。 | EDX:EAX ← 符號延伸(EAX)
+CQO | 型態轉換 | 無 | CQO | x64：把 RAX 符號延伸到 RDX:RAX。 | RDX:RAX ← 符號延伸(RAX)
+IN | 輸入輸出 | 無 | IN AL, port | 從 I/O 連接埠讀取資料到 AL/AX/EAX（埠號大於 255 時要放在 DX）。 | {0} ← 連接埠[{1}]
+OUT | 輸入輸出 | 無 | OUT port, AL | 把 AL/AX/EAX 寫到 I/O 連接埠。 | 連接埠[{0}] ← {1}
+
+# ===== 堆疊 =====
+PUSH | 堆疊 | 無 | PUSH src | 先把 ESP 減去運算元大小（16 位元模式為 SP、x64 為 RSP），再把 src 存到 [ESP]。堆疊往低位址成長。 | ESP ← ESP - 大小；[ESP] ← {0}
+POP | 堆疊 | 無 | POP dest | 從 [ESP] 讀出資料放到 dest，再把 ESP 加上運算元大小。 | {0} ← [ESP]；ESP ← ESP + 大小
+PUSHA/PUSHAD | 堆疊 | 無 | PUSHAD | 依序推入 EAX、ECX、EDX、EBX、原本的 ESP、EBP、ESI、EDI（PUSHA 為 16 位元版本）。 | 保存所有通用暫存器
+POPA/POPAD | 堆疊 | 無 | POPAD | 以 PUSHAD 的相反順序取回所有通用暫存器（存起來的 ESP 會被略過）。 | 還原所有通用暫存器
+PUSHF/PUSHFD/PUSHFQ | 堆疊 | 無 | PUSHFD | 把旗標暫存器推入堆疊。 | [ESP] ← EFLAGS
+POPF/POPFD/POPFQ | 堆疊 | 全部 | POPFD | 從堆疊取回旗標暫存器。 | EFLAGS ← [ESP]
+LAHF | 旗標 | 無 | LAHF | 把 SF、ZF、AF、PF、CF 載入 AH。 | AH ← 旗標低位元組
+SAHF | 旗標 | SF ZF AF PF CF | SAHF | 把 AH 存回旗標的低位元組。 | 旗標低位元組 ← AH
+
+# ===== 算術 =====
+ADD | 算術 | OF SF ZF AF CF PF | ADD dest, src | 加法：dest = dest + src。 | {0} ← {0} + {1}
+ADC | 算術 | OF SF ZF AF CF PF | ADC dest, src | 帶進位加法：dest = dest + src + CF，用在多精度（例如 64 位元）加法的高位部分。 | {0} ← {0} + {1} + CF
+SUB | 算術 | OF SF ZF AF CF PF | SUB dest, src | 減法：dest = dest - src。 | {0} ← {0} - {1}
+SBB | 算術 | OF SF ZF AF CF PF | SBB dest, src | 帶借位減法：dest = dest - src - CF。 | {0} ← {0} - {1} - CF
+INC | 算術 | OF SF ZF AF PF（不影響 CF） | INC dest | 加 1。注意 INC 不會改變 CF。 | {0} ← {0} + 1
+DEC | 算術 | OF SF ZF AF PF（不影響 CF） | DEC dest | 減 1。注意 DEC 不會改變 CF。 | {0} ← {0} - 1
+NEG | 算術 | OF SF ZF AF CF PF | NEG dest | 取二補數（變號）：dest = 0 - dest；dest 不為 0 時 CF=1。 | {0} ← -{0}
+CMP | 比較 | OF SF ZF AF CF PF | CMP a, b | 比較：計算 a - b 但不存回結果，只設定旗標，之後通常接條件跳躍。 | 計算 {0} - {1}（只設定旗標）
+MUL | 算術 | OF CF（其他未定義） | MUL src | 無號乘法。8 位元：AX = AL × src；16 位元：DX:AX = AX × src；32 位元：EDX:EAX = EAX × src。結果高半部不為 0 時 CF=OF=1。 | EDX:EAX ← EAX × {0}（依運算元大小）
+IMUL | 算術 | OF CF（其他未定義） | IMUL src ／ IMUL dest, src ／ IMUL dest, src, imm | 有號乘法。單運算元形式和 MUL 一樣把結果放在 EDX:EAX；雙運算元 dest = dest × src；三運算元 dest = src × imm（結果會截斷，截斷時 CF=OF=1）。 | 1:EDX:EAX ← EAX × {0}（有號） || 2:{0} ← {0} × {1} || 3:{0} ← {1} × {2}
+DIV | 算術 | 未定義 | DIV src | 無號除法。32 位元：EDX:EAX ÷ src，商 → EAX、餘數 → EDX；16 位元：DX:AX ÷ src；8 位元：AX ÷ src，商 → AL、餘數 → AH。除以 0 或商放不下時會產生「除法錯誤」。 | EAX ← EDX:EAX ÷ {0} 的商；EDX ← 餘數（依運算元大小）
+IDIV | 算術 | 未定義 | IDIV src | 有號除法，用法和 DIV 相同；被除數要先用 CDQ（或 CWD、CBW）做符號延伸。 | EAX ← EDX:EAX ÷ {0} 的商（有號）；EDX ← 餘數
+XADD | 算術 | OF SF ZF AF CF PF | XADD dest, src | 交換後相加：src ← 原本的 dest，dest ← dest + src。 | {1} ← {0}；{0} ← {0} + {1}
+DAA | 算術 | SF ZF AF CF PF | DAA | 壓縮 BCD 加法後的十進位調整（僅 16/32 位元模式）。 | AL ← BCD 調整(AL)
+DAS | 算術 | SF ZF AF CF PF | DAS | 壓縮 BCD 減法後的十進位調整。 | AL ← BCD 調整(AL)
+AAA | 算術 | AF CF | AAA | 非壓縮 BCD（ASCII）加法調整。 | AX ← ASCII 調整(AX)
+AAS | 算術 | AF CF | AAS | 非壓縮 BCD（ASCII）減法調整。 | AX ← ASCII 調整(AX)
+AAM | 算術 | SF ZF PF | AAM | 乘法後調整：AH = AL ÷ 10，AL = AL mod 10（可用來拆出十位數與個位數）。 | AH ← AL ÷ 10；AL ← AL mod 10
+AAD | 算術 | SF ZF PF | AAD | 除法前調整：AL = AH×10 + AL，AH = 0。 | AL ← AH×10 + AL；AH ← 0
+
+# ===== 邏輯與位元 =====
+AND | 邏輯 | OF=0 CF=0 SF ZF PF | AND dest, src | 逐位元 AND；常用來清除特定位元（遮罩），例如 AND AL, 0Fh 只留下低 4 位元。 | {0} ← {0} AND {1}
+OR | 邏輯 | OF=0 CF=0 SF ZF PF | OR dest, src | 逐位元 OR；常用來設定特定位元。 | {0} ← {0} OR {1}
+XOR | 邏輯 | OF=0 CF=0 SF ZF PF | XOR dest, src | 逐位元 XOR；用來反相位元，XOR reg, reg 可把暫存器清為 0。 | {0} ← {0} XOR {1}
+NOT | 邏輯 | 無 | NOT dest | 逐位元取反（一補數），不影響旗標。 | {0} ← NOT {0}
+TEST | 比較 | OF=0 CF=0 SF ZF PF | TEST a, b | 計算 a AND b 但不存回，只設定旗標；常用 TEST EAX, EAX 判斷是否為 0 或負數。 | 計算 {0} AND {1}（只設定旗標）
+SHL/SAL | 移位 | CF OF SF ZF PF | SHL dest, count | 左移，右邊補 0，最後移出的位元進入 CF；左移 n 位元等於乘以 2^n。count 可以是立即值或 CL。 | {0} ← {0} << {1}
+SHR | 移位 | CF OF SF ZF PF | SHR dest, count | 邏輯右移，左邊補 0，最後移出的位元進入 CF；相當於無號數除以 2^n。 | {0} ← {0} >> {1}（左邊補 0）
+SAR | 移位 | CF OF SF ZF PF | SAR dest, count | 算術右移，左邊補符號位元；相當於有號數除以 2^n（向負無限大取整）。 | {0} ← {0} >> {1}（左邊補符號位元）
+ROL | 旋轉 | CF OF | ROL dest, count | 循環左移：最高位元移到最低位元，同時複製到 CF。 | {0} ← 循環左移({0}, {1})
+ROR | 旋轉 | CF OF | ROR dest, count | 循環右移：最低位元移到最高位元，同時複製到 CF。 | {0} ← 循環右移({0}, {1})
+RCL | 旋轉 | CF OF | RCL dest, count | 帶進位循環左移：CF 也參與旋轉（等於 n+1 位元的旋轉）。 | CF:{0} ← 循環左移(CF:{0}, {1})
+RCR | 旋轉 | CF OF | RCR dest, count | 帶進位循環右移。 | {0}:CF ← 循環右移({0}:CF, {1})
+SHLD | 移位 | CF OF SF ZF PF | SHLD dest, src, count | 雙精度左移：dest 左移，空出的位元由 src 的高位元填入。 | {0} ← ({0}:{1}) 左移 {2} 後的高半部
+SHRD | 移位 | CF OF SF ZF PF | SHRD dest, src, count | 雙精度右移：dest 右移，空出的位元由 src 的低位元填入。 | {0} ← ({1}:{0}) 右移 {2} 後的低半部
+BT | 位元 | CF | BT base, index | 把指定位元複製到 CF。 | CF ← {0} 的第 {1} 位元
+BTS | 位元 | CF | BTS base, index | 把指定位元複製到 CF，再把它設為 1。 | CF ← 位元；位元 ← 1
+BTR | 位元 | CF | BTR base, index | 把指定位元複製到 CF，再把它清為 0。 | CF ← 位元；位元 ← 0
+BTC | 位元 | CF | BTC base, index | 把指定位元複製到 CF，再把它反相。 | CF ← 位元；位元 ← NOT 位元
+BSF | 位元 | ZF | BSF dest, src | 由低往高找第一個為 1 的位元位置。 | {0} ← {1} 最低的 1 位元位置
+BSR | 位元 | ZF | BSR dest, src | 由高往低找第一個為 1 的位元位置。 | {0} ← {1} 最高的 1 位元位置
+POPCNT | 位元 | ZF | POPCNT dest, src | 計算 src 中 1 的個數。 | {0} ← {1} 中 1 的個數
+LZCNT | 位元 | CF ZF | LZCNT dest, src | 計算前導 0 的個數。 | {0} ← 前導 0 個數({1})
+TZCNT | 位元 | CF ZF | TZCNT dest, src | 計算尾端 0 的個數。 | {0} ← 尾端 0 個數({1})
+
+# ===== 流程控制 =====
+JMP | 流程控制 | 無 | JMP target | 無條件跳躍到 target。 | 跳到 {0}
+JE/JZ | 條件跳躍 | 無 | JE label | 相等或結果為 0 時跳躍（ZF=1）。 | 若 ZF=1（相等）跳到 {0}
+JNE/JNZ | 條件跳躍 | 無 | JNE label | 不相等或結果不為 0 時跳躍（ZF=0）。 | 若 ZF=0（不相等）跳到 {0}
+JA/JNBE | 條件跳躍 | 無 | JA label | 無號數「大於」時跳躍（CF=0 且 ZF=0）。 | 若無號大於（CF=0 且 ZF=0）跳到 {0}
+JAE/JNB/JNC | 條件跳躍 | 無 | JAE label | 無號數「大於或等於」時跳躍（CF=0）；JNC 意思是沒有進位時跳躍。 | 若 CF=0（無號大於等於）跳到 {0}
+JB/JNAE/JC | 條件跳躍 | 無 | JB label | 無號數「小於」時跳躍（CF=1）；JC 意思是有進位時跳躍。 | 若 CF=1（無號小於）跳到 {0}
+JBE/JNA | 條件跳躍 | 無 | JBE label | 無號數「小於或等於」時跳躍（CF=1 或 ZF=1）。 | 若無號小於等於（CF=1 或 ZF=1）跳到 {0}
+JG/JNLE | 條件跳躍 | 無 | JG label | 有號數「大於」時跳躍（ZF=0 且 SF=OF）。 | 若有號大於（ZF=0 且 SF=OF）跳到 {0}
+JGE/JNL | 條件跳躍 | 無 | JGE label | 有號數「大於或等於」時跳躍（SF=OF）。 | 若有號大於等於（SF=OF）跳到 {0}
+JL/JNGE | 條件跳躍 | 無 | JL label | 有號數「小於」時跳躍（SF≠OF）。 | 若有號小於（SF≠OF）跳到 {0}
+JLE/JNG | 條件跳躍 | 無 | JLE label | 有號數「小於或等於」時跳躍（ZF=1 或 SF≠OF）。 | 若有號小於等於（ZF=1 或 SF≠OF）跳到 {0}
+JS | 條件跳躍 | 無 | JS label | 結果為負數（SF=1）時跳躍。 | 若 SF=1（負數）跳到 {0}
+JNS | 條件跳躍 | 無 | JNS label | 結果不是負數（SF=0）時跳躍。 | 若 SF=0 跳到 {0}
+JO | 條件跳躍 | 無 | JO label | 發生有號溢位（OF=1）時跳躍。 | 若 OF=1 跳到 {0}
+JNO | 條件跳躍 | 無 | JNO label | 沒有有號溢位（OF=0）時跳躍。 | 若 OF=0 跳到 {0}
+JP/JPE | 條件跳躍 | 無 | JP label | 同位旗標為 1（結果低 8 位元有偶數個 1）時跳躍。 | 若 PF=1 跳到 {0}
+JNP/JPO | 條件跳躍 | 無 | JNP label | 同位旗標為 0 時跳躍。 | 若 PF=0 跳到 {0}
+JCXZ | 條件跳躍 | 無 | JCXZ label | CX = 0 時跳躍（不看旗標）。 | 若 CX=0 跳到 {0}
+JECXZ | 條件跳躍 | 無 | JECXZ label | ECX = 0 時跳躍；常放在 LOOP 迴圈前面，避免 ECX=0 造成 2^32 次迴圈。 | 若 ECX=0 跳到 {0}
+JRCXZ | 條件跳躍 | 無 | JRCXZ label | x64：RCX = 0 時跳躍。 | 若 RCX=0 跳到 {0}
+LOOP | 迴圈 | 無 | LOOP label | ECX 先減 1，若 ECX ≠ 0 就跳到 label（16 位元模式使用 CX）。不影響旗標。 | ECX ← ECX - 1；若 ECX≠0 跳到 {0}
+LOOPE/LOOPZ | 迴圈 | 無 | LOOPE label | ECX 減 1，若 ECX ≠ 0 而且 ZF=1 就跳躍。 | ECX ← ECX - 1；若 ECX≠0 且 ZF=1 跳到 {0}
+LOOPNE/LOOPNZ | 迴圈 | 無 | LOOPNE label | ECX 減 1，若 ECX ≠ 0 而且 ZF=0 就跳躍。 | ECX ← ECX - 1；若 ECX≠0 且 ZF=0 跳到 {0}
+CALL | 副程式 | 無 | CALL target | 呼叫副程式：把下一行指令的位址（返回位址）推入堆疊，然後跳到 target。 | PUSH 返回位址；跳到 {0}
+RET/RETN/RETF | 副程式 | 無 | RET ／ RET n | 從堆疊彈出返回位址並跳回去；RET n 會再把 ESP 加 n（stdcall 由被呼叫者清除參數）。 | 0:EIP ← POP()（返回呼叫處） || 1:EIP ← POP()；ESP ← ESP + {0}
+ENTER | 副程式 | 無 | ENTER size, 0 | 建立堆疊框架：等同 PUSH EBP；MOV EBP, ESP；SUB ESP, size。 | 建立堆疊框架（保留 {0} 位元組的區域變數）
+LEAVE | 副程式 | 無 | LEAVE | 釋放堆疊框架：等同 MOV ESP, EBP；POP EBP。 | ESP ← EBP；POP EBP
+INT | 中斷 | IF TF | INT n | 軟體中斷：呼叫中斷向量 n 的服務程式，例如 DOS 的 INT 21h、BIOS 的 INT 10h、Linux 的 INT 80h。 | 呼叫中斷 {0}
+INTO | 中斷 | 無 | INTO | OF=1 時觸發 INT 4。 | 若 OF=1 呼叫 INT 4
+IRET/IRETD/IRETQ | 中斷 | 全部 | IRET | 從中斷服務程式返回，並恢復旗標。 | 從中斷返回
+SYSCALL | 系統呼叫 | 無 | SYSCALL | x64 Linux 系統呼叫：功能號碼放 RAX，參數依序放 RDI、RSI、RDX、R10、R8、R9。 | 系統呼叫（RAX = 功能號碼）
+SYSENTER | 系統呼叫 | 無 | SYSENTER | 32 位元的快速系統呼叫。 | 進入核心模式
+HLT | 系統 | 無 | HLT | 暫停 CPU，直到下一個中斷。 | 暫停 CPU
+NOP | 其他 | 無 | NOP | 不做任何事（1 個位元組），常用於對齊或保留空間。 | 不做事
+CPUID | 系統 | 無 | CPUID | 依 EAX 的功能號碼，把 CPU 資訊放到 EAX、EBX、ECX、EDX。 | 讀取 CPU 資訊
+RDTSC | 系統 | 無 | RDTSC | 讀取時間戳記計數器到 EDX:EAX，可用來量測時脈週期數。 | EDX:EAX ← 時間戳記
+CLI | 旗標 | IF | CLI | 清除中斷旗標（禁止可遮罩中斷）。 | IF ← 0
+STI | 旗標 | IF | STI | 設定中斷旗標（允許中斷）。 | IF ← 1
+CLC | 旗標 | CF | CLC | 清除進位旗標。 | CF ← 0
+STC | 旗標 | CF | STC | 設定進位旗標。 | CF ← 1
+CMC | 旗標 | CF | CMC | 進位旗標反相。 | CF ← NOT CF
+CLD | 旗標 | DF | CLD | 清除方向旗標：字串指令執行後 ESI、EDI 會遞增。 | DF ← 0（位址遞增）
+STD | 旗標 | DF | STD | 設定方向旗標：字串指令執行後 ESI、EDI 會遞減。 | DF ← 1（位址遞減）
+
+# ===== 條件設定 / 條件搬移 =====
+SETE/SETZ | 條件設定 | 無 | SETE r/m8 | ZF=1 時把 8 位元目的設為 1，否則設為 0。 | {0} ← (ZF=1) ? 1 : 0
+SETNE/SETNZ | 條件設定 | 無 | SETNE r/m8 | ZF=0 時設為 1，否則為 0。 | {0} ← (ZF=0) ? 1 : 0
+SETA/SETNBE | 條件設定 | 無 | SETA r/m8 | 無號大於時設為 1。 | {0} ← (無號大於) ? 1 : 0
+SETAE/SETNB/SETNC | 條件設定 | 無 | SETAE r/m8 | 無號大於等於（CF=0）時設為 1。 | {0} ← (CF=0) ? 1 : 0
+SETB/SETNAE/SETC | 條件設定 | 無 | SETB r/m8 | 無號小於（CF=1）時設為 1。 | {0} ← (CF=1) ? 1 : 0
+SETBE/SETNA | 條件設定 | 無 | SETBE r/m8 | 無號小於等於時設為 1。 | {0} ← (無號小於等於) ? 1 : 0
+SETG/SETNLE | 條件設定 | 無 | SETG r/m8 | 有號大於時設為 1。 | {0} ← (有號大於) ? 1 : 0
+SETGE/SETNL | 條件設定 | 無 | SETGE r/m8 | 有號大於等於時設為 1。 | {0} ← (有號大於等於) ? 1 : 0
+SETL/SETNGE | 條件設定 | 無 | SETL r/m8 | 有號小於時設為 1。 | {0} ← (有號小於) ? 1 : 0
+SETLE/SETNG | 條件設定 | 無 | SETLE r/m8 | 有號小於等於時設為 1。 | {0} ← (有號小於等於) ? 1 : 0
+SETS | 條件設定 | 無 | SETS r/m8 | SF=1 時設為 1。 | {0} ← (SF=1) ? 1 : 0
+SETNS | 條件設定 | 無 | SETNS r/m8 | SF=0 時設為 1。 | {0} ← (SF=0) ? 1 : 0
+SETO | 條件設定 | 無 | SETO r/m8 | OF=1 時設為 1。 | {0} ← (OF=1) ? 1 : 0
+SETNO | 條件設定 | 無 | SETNO r/m8 | OF=0 時設為 1。 | {0} ← (OF=0) ? 1 : 0
+SETP/SETPE | 條件設定 | 無 | SETP r/m8 | PF=1 時設為 1。 | {0} ← (PF=1) ? 1 : 0
+SETNP/SETPO | 條件設定 | 無 | SETNP r/m8 | PF=0 時設為 1。 | {0} ← (PF=0) ? 1 : 0
+CMOVE/CMOVZ | 條件搬移 | 無 | CMOVE dest, src | ZF=1 時才把 src 複製到 dest，可用來避免分支。 | 若 ZF=1 則 {0} ← {1}
+CMOVNE/CMOVNZ | 條件搬移 | 無 | CMOVNE dest, src | ZF=0 時才搬移。 | 若 ZF=0 則 {0} ← {1}
+CMOVA/CMOVNBE | 條件搬移 | 無 | CMOVA dest, src | 無號大於時才搬移。 | 若無號大於則 {0} ← {1}
+CMOVAE/CMOVNB/CMOVNC | 條件搬移 | 無 | CMOVAE dest, src | CF=0 時才搬移。 | 若 CF=0 則 {0} ← {1}
+CMOVB/CMOVNAE/CMOVC | 條件搬移 | 無 | CMOVB dest, src | CF=1 時才搬移。 | 若 CF=1 則 {0} ← {1}
+CMOVBE/CMOVNA | 條件搬移 | 無 | CMOVBE dest, src | 無號小於等於時才搬移。 | 若無號小於等於則 {0} ← {1}
+CMOVG/CMOVNLE | 條件搬移 | 無 | CMOVG dest, src | 有號大於時才搬移（可用來取最大值）。 | 若有號大於則 {0} ← {1}
+CMOVGE/CMOVNL | 條件搬移 | 無 | CMOVGE dest, src | 有號大於等於時才搬移。 | 若有號大於等於則 {0} ← {1}
+CMOVL/CMOVNGE | 條件搬移 | 無 | CMOVL dest, src | 有號小於時才搬移（可用來取最小值）。 | 若有號小於則 {0} ← {1}
+CMOVLE/CMOVNG | 條件搬移 | 無 | CMOVLE dest, src | 有號小於等於時才搬移。 | 若有號小於等於則 {0} ← {1}
+CMOVS | 條件搬移 | 無 | CMOVS dest, src | SF=1 時才搬移。 | 若 SF=1 則 {0} ← {1}
+CMOVNS | 條件搬移 | 無 | CMOVNS dest, src | SF=0 時才搬移。 | 若 SF=0 則 {0} ← {1}
+CMOVO | 條件搬移 | 無 | CMOVO dest, src | OF=1 時才搬移。 | 若 OF=1 則 {0} ← {1}
+CMOVNO | 條件搬移 | 無 | CMOVNO dest, src | OF=0 時才搬移。 | 若 OF=0 則 {0} ← {1}
+
+# ===== 字串指令 =====
+MOVSB/MOVSW/MOVSD/MOVSQ | 字串 | 無 | REP MOVSB | 把 [ESI] 複製到 [EDI]，再依 DF 調整 ESI、EDI（B=1、W=2、D=4、Q=8 位元組）；搭配 REP 重複 ECX 次。註：帶運算元的 MOVSD 是 SSE 浮點搬移指令。 | [EDI] ← [ESI]；ESI、EDI 前進
+STOSB/STOSW/STOSD/STOSQ | 字串 | 無 | REP STOSB | 把 AL/AX/EAX 存到 [EDI]，EDI 前進；搭配 REP 可快速把一段記憶體填成同一個值。 | [EDI] ← AL/AX/EAX；EDI 前進
+LODSB/LODSW/LODSD/LODSQ | 字串 | 無 | LODSB | 從 [ESI] 載入到 AL/AX/EAX，ESI 前進。 | AL/AX/EAX ← [ESI]；ESI 前進
+SCASB/SCASW/SCASD/SCASQ | 字串 | OF SF ZF AF CF PF | REPNE SCASB | 比較 AL/AX/EAX 與 [EDI]（計算 AL - [EDI]），EDI 前進；REPNE SCASB 常用來找字串結尾的 0。 | 比較 AL 與 [EDI]；EDI 前進
+CMPSB/CMPSW/CMPSD/CMPSQ | 字串 | OF SF ZF AF CF PF | REPE CMPSB | 比較 [ESI] 與 [EDI]（計算 [ESI] - [EDI]），兩者都前進；REPE CMPSB 用來比較兩個字串。 | 比較 [ESI] 與 [EDI]；ESI、EDI 前進
+REP | 前綴 | 無 | REP 字串指令 | 重複執行後面的字串指令，每次 ECX 減 1，直到 ECX = 0。 | 重複直到 ECX=0
+REPE/REPZ | 前綴 | 無 | REPE CMPSB | ECX≠0 而且 ZF=1 時重複。 | 重複直到 ECX=0 或 ZF=0
+REPNE/REPNZ | 前綴 | 無 | REPNE SCASB | ECX≠0 而且 ZF=0 時重複。 | 重複直到 ECX=0 或 ZF=1
+
+# ===== 浮點（FPU / SSE，僅提供說明，模擬器不執行）=====
+FLD | 浮點(FPU) | 無 | FLD src | 把浮點數載入 FPU 暫存器堆疊頂端 ST(0)。 | ST(0) ← {0}
+FST/FSTP | 浮點(FPU) | 無 | FSTP dest | 把 ST(0) 存到 dest；FSTP 會同時彈出 FPU 堆疊。 | {0} ← ST(0)
+FILD | 浮點(FPU) | 無 | FILD src | 載入整數並轉成浮點數放在 ST(0)。 | ST(0) ← 浮點({0})
+FIST/FISTP | 浮點(FPU) | 無 | FISTP dest | 把 ST(0) 轉成整數存到 dest。 | {0} ← 整數(ST(0))
+FADD/FADDP | 浮點(FPU) | 無 | FADD src | 浮點加法。 | ST(0) ← ST(0) + {0}
+FSUB/FSUBP | 浮點(FPU) | 無 | FSUB src | 浮點減法。 | ST(0) ← ST(0) - {0}
+FMUL/FMULP | 浮點(FPU) | 無 | FMUL src | 浮點乘法。 | ST(0) ← ST(0) × {0}
+FDIV/FDIVP | 浮點(FPU) | 無 | FDIV src | 浮點除法。 | ST(0) ← ST(0) ÷ {0}
+FSQRT | 浮點(FPU) | 無 | FSQRT | 平方根。 | ST(0) ← √ST(0)
+MOVSS | 浮點(SSE) | 無 | MOVSS xmm, m32 | 搬移單精度浮點數（32 位元）。 | {0} ← {1}
+MOVUPS/MOVAPS | 浮點(SSE) | 無 | MOVUPS xmm, m128 | 搬移 128 位元（4 個單精度浮點數）；MOVAPS 要求 16 位元組對齊。 | {0} ← {1}
+ADDSS/ADDSD | 浮點(SSE) | 無 | ADDSS xmm1, xmm2 | 純量浮點加法（SS 單精度、SD 倍精度）。 | {0} ← {0} + {1}
+SUBSS/SUBSD | 浮點(SSE) | 無 | SUBSS xmm1, xmm2 | 純量浮點減法。 | {0} ← {0} - {1}
+MULSS/MULSD | 浮點(SSE) | 無 | MULSS xmm1, xmm2 | 純量浮點乘法。 | {0} ← {0} × {1}
+DIVSS/DIVSD | 浮點(SSE) | 無 | DIVSS xmm1, xmm2 | 純量浮點除法。 | {0} ← {0} ÷ {1}
+CVTSI2SS/CVTSI2SD | 浮點(SSE) | 無 | CVTSI2SD xmm, r32 | 整數轉浮點。 | {0} ← 浮點({1})
+CVTTSS2SI/CVTTSD2SI | 浮點(SSE) | 無 | CVTTSD2SI r32, xmm | 浮點轉整數（無條件捨去小數）。 | {0} ← 整數({1})

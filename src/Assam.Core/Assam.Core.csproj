@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{6F3B1C2A-5D4E-4A7B-9C1D-2E8F3A4B5C61}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Assam.Core</RootNamespace>
+    <AssemblyName>Assam.Core</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <LangVersion>7.3</LangVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Analysis\ArchitectureDetector.cs" />
+    <Compile Include="Analysis\AsmArch.cs" />
+    <Compile Include="Analysis\AsmLineParser.cs" />
+    <Compile Include="Analysis\CodeExplainer.cs" />
+    <Compile Include="Analysis\DirectiveInfo.cs" />
+    <Compile Include="Analysis\OperandAnalyzer.cs" />
+    <Compile Include="Analysis\RegisterInfo.cs" />
+    <Compile Include="Assistant\AsmAssistant.cs" />
+    <Compile Include="Assistant\CodeExtractor.cs" />
+    <Compile Include="Assistant\IntentClassifier.cs" />
+    <Compile Include="Assistant\NumberRequestParser.cs" />
+    <Compile Include="Derivation\NumberDerivation.cs" />
+    <Compile Include="Instructions\InstructionInfo.cs" />
+    <Compile Include="Instructions\InstructionSet.cs" />
+    <Compile Include="Knowledge\KnowledgeBase.cs" />
+    <Compile Include="Knowledge\KnowledgeEntry.cs" />
+    <Compile Include="Knowledge\KnowledgeParser.cs" />
+    <Compile Include="Learning\MemoryStore.cs" />
+    <Compile Include="Learning\NaiveBayesClassifier.cs" />
+    <Compile Include="Learning\UserMemoryData.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Samples\SampleCode.cs" />
+    <Compile Include="Search\SearchEngine.cs" />
+    <Compile Include="Simulation\ExpressionEvaluator.cs" />
+    <Compile Include="Simulation\FlagMath.cs" />
+    <Compile Include="Simulation\SimulationModels.cs" />
+    <Compile Include="Simulation\X86Simulator.cs" />
+    <Compile Include="Text\AsmNumber.cs" />
+    <Compile Include="Text\TermNormalizer.cs" />
+    <Compile Include="Text\TextTokenizer.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 內建知識與指令表：以內嵌資源編進 DLL，執行時不需要額外檔案，也不會被誤刪 -->
+    <EmbeddedResource Include="Instructions\Data\arm.txt" />
+    <EmbeddedResource Include="Instructions\Data\arm64.txt" />
+    <EmbeddedResource Include="Instructions\Data\avr.txt" />
+    <EmbeddedResource Include="Instructions\Data\i8051.txt" />
+    <EmbeddedResource Include="Instructions\Data\mips.txt" />
+    <EmbeddedResource Include="Instructions\Data\riscv.txt" />
+    <EmbeddedResource Include="Instructions\Data\x86.txt" />
+    <EmbeddedResource Include="Knowledge\Data\00_basics.md" />
+    <EmbeddedResource Include="Knowledge\Data\10_x86_registers.md" />
+    <EmbeddedResource Include="Knowledge\Data\11_x86_addressing.md" />
+    <EmbeddedResource Include="Knowledge\Data\12_x86_instructions.md" />
+    <EmbeddedResource Include="Knowledge\Data\13_x86_procedures.md" />
+    <EmbeddedResource Include="Knowledge\Data\14_x86_programs.md" />
+    <EmbeddedResource Include="Knowledge\Data\20_howto_x86.md" />
+    <EmbeddedResource Include="Knowledge\Data\30_derivation.md" />
+    <EmbeddedResource Include="Knowledge\Data\40_8051.md" />
+    <EmbeddedResource Include="Knowledge\Data\50_arm.md" />
+    <EmbeddedResource Include="Knowledge\Data\60_mips_riscv_avr.md" />
+    <EmbeddedResource Include="Knowledge\Data\70_debug.md" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

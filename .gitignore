@@ -1,0 +1,14 @@
+# Visual Studio / MSBuild
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+*.cache
+packages/
+TestResults/
+*.log
+
+# ASSAM 執行時產生的學習記憶（每台電腦各自的資料，不放進版本控制）
+UserData/

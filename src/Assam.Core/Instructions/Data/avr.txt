@@ -1,0 +1,78 @@
+﻿# AVR（ATmega/ATtiny，Arduino 使用的晶片）指令資料
+@arch avr
+@name AVR
+
+LDI | 資料搬移 | 無 | LDI Rd, K | 把 8 位元常數載入暫存器（只能用 R16～R31）。 | {0} ← {1}
+MOV | 資料搬移 | 無 | MOV Rd, Rr | 複製暫存器。 | {0} ← {1}
+MOVW | 資料搬移 | 無 | MOVW Rd, Rr | 複製一組暫存器對（16 位元），例如 MOVW R24, R22。 | {0}:{0}+1 ← {1}:{1}+1
+LDS | 資料搬移 | 無 | LDS Rd, k | 從 SRAM 位址 k 載入 1 個位元組。 | {0} ← SRAM[{1}]
+STS | 資料搬移 | 無 | STS k, Rr | 把 Rr 存到 SRAM 位址 k。 | SRAM[{0}] ← {1}
+LD | 資料搬移 | 無 | LD Rd, X ／ X+ ／ -X | 透過指標暫存器 X、Y、Z 間接載入；X+ 代表載入後指標加 1，-X 代表先減 1 再載入。 | {0} ← SRAM[{1}]
+LDD | 資料搬移 | 無 | LDD Rd, Y+q | 以 Y 或 Z 加位移 q 間接載入。 | {0} ← SRAM[{1}]
+ST | 資料搬移 | 無 | ST X+, Rr | 透過指標暫存器間接儲存。 | SRAM[{0}] ← {1}
+STD | 資料搬移 | 無 | STD Y+q, Rr | 以 Y 或 Z 加位移 q 間接儲存。 | SRAM[{0}] ← {1}
+LPM | 資料搬移 | 無 | LPM Rd, Z+ | 從程式記憶體（Flash）讀取資料，常用於查表或讀取字串常數。 | 0:R0 ← Flash[Z] || 2:{0} ← Flash[{1}]
+IN | 輸入輸出 | 無 | IN Rd, A | 讀取 I/O 暫存器，例如 IN R16, PINB 讀取 B 埠腳位狀態。 | {0} ← I/O[{1}]
+OUT | 輸入輸出 | 無 | OUT A, Rr | 寫入 I/O 暫存器，例如 OUT DDRB, R16 設定方向、OUT PORTB, R16 輸出。 | I/O[{0}] ← {1}
+PUSH | 堆疊 | 無 | PUSH Rr | 把暫存器推入堆疊（存入後 SP 減 1）。 | 堆疊 ← {0}
+POP | 堆疊 | 無 | POP Rd | 從堆疊取回暫存器。 | {0} ← 堆疊
+ADD | 算術 | H S V N Z C | ADD Rd, Rr | Rd = Rd + Rr。 | {0} ← {0} + {1}
+ADC | 算術 | H S V N Z C | ADC Rd, Rr | 帶進位加法 Rd = Rd + Rr + C（多位元組加法）。 | {0} ← {0} + {1} + C
+ADIW | 算術 | S V N Z C | ADIW Rd, K | 16 位元暫存器對加上 0～63（只能用 R24、R26(X)、R28(Y)、R30(Z)）。 | {0}+1:{0} ← {0}+1:{0} + {1}
+SUB | 算術 | H S V N Z C | SUB Rd, Rr | Rd = Rd - Rr。 | {0} ← {0} - {1}
+SUBI | 算術 | H S V N Z C | SUBI Rd, K | Rd = Rd - K（R16～R31）。AVR 沒有 ADDI，加常數可用 SUBI Rd, -K。 | {0} ← {0} - {1}
+SBC | 算術 | H S V N Z C | SBC Rd, Rr | 帶借位減法 Rd = Rd - Rr - C。 | {0} ← {0} - {1} - C
+SBCI | 算術 | H S V N Z C | SBCI Rd, K | 帶借位減去常數。 | {0} ← {0} - {1} - C
+SBIW | 算術 | S V N Z C | SBIW Rd, K | 16 位元暫存器對減去 0～63。 | {0}+1:{0} ← {0}+1:{0} - {1}
+INC | 算術 | S V N Z | INC Rd | 加 1（不影響 C）。 | {0} ← {0} + 1
+DEC | 算術 | S V N Z | DEC Rd | 減 1（不影響 C），常用於迴圈計數。 | {0} ← {0} - 1
+NEG | 算術 | H S V N Z C | NEG Rd | 取二補數（變號）。 | {0} ← -{0}
+COM | 邏輯 | S V N Z C | COM Rd | 取一補數（逐位元反相）。 | {0} ← NOT {0}
+MUL | 算術 | Z C | MUL Rd, Rr | 無號 8×8 乘法，16 位元結果放在 R1:R0。 | R1:R0 ← {0} × {1}
+AND | 邏輯 | S V N Z | AND Rd, Rr | 逐位元 AND。 | {0} ← {0} AND {1}
+ANDI | 邏輯 | S V N Z | ANDI Rd, K | 和常數做 AND（R16～R31）。 | {0} ← {0} AND {1}
+OR | 邏輯 | S V N Z | OR Rd, Rr | 逐位元 OR。 | {0} ← {0} OR {1}
+ORI | 邏輯 | S V N Z | ORI Rd, K | 和常數做 OR（R16～R31）。 | {0} ← {0} OR {1}
+EOR | 邏輯 | S V N Z | EOR Rd, Rr | 逐位元 XOR。 | {0} ← {0} XOR {1}
+CLR | 邏輯 | S V N Z | CLR Rd | 清為 0（實際上是 EOR Rd, Rd）。 | {0} ← 0
+SER | 資料搬移 | 無 | SER Rd | 設為 0xFF（R16～R31）。 | {0} ← 0xFF
+LSL | 移位 | H S V N Z C | LSL Rd | 左移 1 位元（乘以 2）。 | {0} ← {0} << 1
+LSR | 移位 | S V N Z C | LSR Rd | 邏輯右移 1 位元（無號除以 2）。 | {0} ← {0} >> 1（補 0）
+ASR | 移位 | S V N Z C | ASR Rd | 算術右移 1 位元（有號除以 2）。 | {0} ← {0} >> 1（補符號位元）
+ROL | 旋轉 | H S V N Z C | ROL Rd | 連同 C 循環左移 1 位元。 | C:{0} ← 循環左移(C:{0})
+ROR | 旋轉 | S V N Z C | ROR Rd | 連同 C 循環右移 1 位元。 | {0}:C ← 循環右移({0}:C)
+SWAP | 邏輯 | 無 | SWAP Rd | 交換高低 4 位元。 | {0} 高 4 位元 ↔ 低 4 位元
+CP | 比較 | H S V N Z C | CP Rd, Rr | 計算 Rd - Rr 只更新旗標。 | 計算 {0} - {1}（只設定旗標）
+CPC | 比較 | H S V N Z C | CPC Rd, Rr | 帶進位比較（多位元組比較）。 | 計算 {0} - {1} - C（只設定旗標）
+CPI | 比較 | H S V N Z C | CPI Rd, K | 和常數比較（R16～R31）。 | 計算 {0} - {1}（只設定旗標）
+TST | 比較 | S V N Z | TST Rd | 測試是否為 0 或負數（AND Rd, Rd）。 | 計算 {0} AND {0}（只設定旗標）
+CPSE | 條件跳躍 | 無 | CPSE Rd, Rr | 相等時跳過下一行指令。 | 若 {0} = {1} 跳過下一行
+RJMP | 流程控制 | 無 | RJMP k | 相對跳躍（±2K 字組）；RJMP 到自己可做無窮迴圈。 | 跳到 {0}
+JMP | 流程控制 | 無 | JMP k | 絕對跳躍（4M 字組範圍，大型晶片才有）。 | 跳到 {0}
+IJMP | 流程控制 | 無 | IJMP | 跳到 Z 指標所指的位址。 | 跳到 Z
+RCALL | 副程式 | 無 | RCALL k | 相對呼叫副程式，返回位址推入堆疊。 | 呼叫 {0}
+CALL | 副程式 | 無 | CALL k | 絕對呼叫副程式。 | 呼叫 {0}
+ICALL | 副程式 | 無 | ICALL | 呼叫 Z 指標所指的副程式。 | 呼叫 Z
+RET | 副程式 | 無 | RET | 從副程式返回。 | 返回呼叫處
+RETI | 中斷 | I | RETI | 從中斷服務程式返回並重新開啟全域中斷。 | 從中斷返回
+BREQ | 條件跳躍 | 無 | BREQ k | Z=1（相等）時跳躍。 | 若 Z=1 跳到 {0}
+BRNE | 條件跳躍 | 無 | BRNE k | Z=0（不相等）時跳躍，搭配 DEC 做延遲迴圈。 | 若 Z=0 跳到 {0}
+BRCS/BRLO | 條件跳躍 | 無 | BRLO k | C=1（無號小於）時跳躍。 | 若 C=1 跳到 {0}
+BRCC/BRSH | 條件跳躍 | 無 | BRSH k | C=0（無號大於等於）時跳躍。 | 若 C=0 跳到 {0}
+BRLT | 條件跳躍 | 無 | BRLT k | 有號小於（S=1）時跳躍。 | 若 S=1 跳到 {0}
+BRGE | 條件跳躍 | 無 | BRGE k | 有號大於等於（S=0）時跳躍。 | 若 S=0 跳到 {0}
+BRMI | 條件跳躍 | 無 | BRMI k | 負數（N=1）時跳躍。 | 若 N=1 跳到 {0}
+BRPL | 條件跳躍 | 無 | BRPL k | 非負數（N=0）時跳躍。 | 若 N=0 跳到 {0}
+SBI | 位元 | 無 | SBI A, b | 把 I/O 暫存器的第 b 位元設為 1，例如 SBI PORTB, 5 讓 PB5（Arduino D13）輸出高電位。 | I/O {0} 的第 {1} 位元 ← 1
+CBI | 位元 | 無 | CBI A, b | 把 I/O 暫存器的第 b 位元清為 0。 | I/O {0} 的第 {1} 位元 ← 0
+SBIS | 條件跳躍 | 無 | SBIS A, b | I/O 位元為 1 時跳過下一行。 | 若 {0} 的第 {1} 位元 = 1 跳過下一行
+SBIC | 條件跳躍 | 無 | SBIC A, b | I/O 位元為 0 時跳過下一行。 | 若 {0} 的第 {1} 位元 = 0 跳過下一行
+SBRS | 條件跳躍 | 無 | SBRS Rr, b | 暫存器位元為 1 時跳過下一行。 | 若 {0} 的第 {1} 位元 = 1 跳過下一行
+SBRC | 條件跳躍 | 無 | SBRC Rr, b | 暫存器位元為 0 時跳過下一行。 | 若 {0} 的第 {1} 位元 = 0 跳過下一行
+SEI | 中斷 | I | SEI | 開啟全域中斷。 | I ← 1
+CLI | 中斷 | I | CLI | 關閉全域中斷。 | I ← 0
+SEC | 旗標 | C | SEC | 設定進位旗標。 | C ← 1
+CLC | 旗標 | C | CLC | 清除進位旗標。 | C ← 0
+NOP | 其他 | 無 | NOP | 不做事（1 個時脈週期）。 | 不做事
+SLEEP | 系統 | 無 | SLEEP | 進入睡眠模式。 | 睡眠
+WDR | 系統 | 無 | WDR | 重設看門狗計時器。 | 重設看門狗

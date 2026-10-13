@@ -1,0 +1,68 @@
+﻿# ARM 32 位元（ARM / Thumb-2，UAL 語法）指令資料
+# 條件碼字尾（EQ、NE、GT…）與 S 字尾（更新旗標）會自動辨識，例如 ADDS、MOVEQ、BNE。
+@arch arm
+@name ARM 32 位元
+
+MOV | 資料搬移 | N Z C（加 S 時） | MOV Rd, Operand2 | Rd = Operand2（暫存器、#立即值或移位過的暫存器）。加上 S 字尾（MOVS）才會更新旗標。 | {0} ← {1}
+MVN | 資料搬移 | N Z C（加 S 時） | MVN Rd, Operand2 | Rd = NOT Operand2（逐位元取反）。 | {0} ← NOT {1}
+MOVW | 資料搬移 | 無 | MOVW Rd, #imm16 | 把 16 位元立即值放進 Rd 的低半部（高半部清 0）。 | {0} ← {1}
+MOVT | 資料搬移 | 無 | MOVT Rd, #imm16 | 把 16 位元立即值放進 Rd 的高半部（低半部不變），常與 MOVW 搭配載入 32 位元常數。 | {0} 的高 16 位元 ← {1}
+ADD | 算術 | N Z C V（加 S 時） | ADD Rd, Rn, Op2 | 加法：Rd = Rn + Op2。 | 2:{0} ← {0} + {1} || 3:{0} ← {1} + {2}
+ADC | 算術 | N Z C V（加 S 時） | ADC Rd, Rn, Op2 | 帶進位加法：Rd = Rn + Op2 + C，用於 64 位元加法的高位字組。 | 2:{0} ← {0} + {1} + C || 3:{0} ← {1} + {2} + C
+SUB | 算術 | N Z C V（加 S 時） | SUB Rd, Rn, Op2 | 減法：Rd = Rn - Op2。 | 2:{0} ← {0} - {1} || 3:{0} ← {1} - {2}
+SBC | 算術 | N Z C V（加 S 時） | SBC Rd, Rn, Op2 | 帶借位減法：Rd = Rn - Op2 - NOT(C)。注意 ARM 的 C 在減法時代表「沒有借位」。 | 2:{0} ← {0} - {1} - NOT C || 3:{0} ← {1} - {2} - NOT C
+RSB | 算術 | N Z C V（加 S 時） | RSB Rd, Rn, Op2 | 反向減法：Rd = Op2 - Rn；RSB R0, R0, #0 可以把 R0 變號。 | 3:{0} ← {2} - {1} || 2:{0} ← {1} - {0}
+RSC | 算術 | N Z C V（加 S 時） | RSC Rd, Rn, Op2 | 帶借位反向減法。 | 3:{0} ← {2} - {1} - NOT C
+MUL | 算術 | N Z（加 S 時） | MUL Rd, Rm, Rs | 乘法：Rd = Rm × Rs（只保留低 32 位元）。 | 3:{0} ← {1} × {2} || 2:{0} ← {0} × {1}
+MLA | 算術 | N Z（加 S 時） | MLA Rd, Rm, Rs, Rn | 乘加：Rd = Rm × Rs + Rn。 | {0} ← {1} × {2} + {3}
+MLS | 算術 | 無 | MLS Rd, Rm, Rs, Rn | 乘減：Rd = Rn - Rm × Rs，可以配合除法求餘數。 | {0} ← {3} - {1} × {2}
+UMULL | 算術 | N Z（加 S 時） | UMULL RdLo, RdHi, Rm, Rs | 無號 32×32 → 64 位元乘法，低位放 RdLo、高位放 RdHi。 | {1}:{0} ← {2} × {3}（無號）
+SMULL | 算術 | N Z（加 S 時） | SMULL RdLo, RdHi, Rm, Rs | 有號 32×32 → 64 位元乘法。 | {1}:{0} ← {2} × {3}（有號）
+UDIV | 算術 | 無 | UDIV Rd, Rn, Rm | 無號除法（Cortex-M3/M4 與 ARMv7-A 以上才有硬體除法）。 | {0} ← {1} ÷ {2}（無號）
+SDIV | 算術 | 無 | SDIV Rd, Rn, Rm | 有號除法。 | {0} ← {1} ÷ {2}（有號）
+AND | 邏輯 | N Z C（加 S 時） | AND Rd, Rn, Op2 | 逐位元 AND。 | 3:{0} ← {1} AND {2} || 2:{0} ← {0} AND {1}
+ORR | 邏輯 | N Z C（加 S 時） | ORR Rd, Rn, Op2 | 逐位元 OR。 | 3:{0} ← {1} OR {2} || 2:{0} ← {0} OR {1}
+EOR | 邏輯 | N Z C（加 S 時） | EOR Rd, Rn, Op2 | 逐位元 XOR。 | 3:{0} ← {1} XOR {2} || 2:{0} ← {0} XOR {1}
+BIC | 邏輯 | N Z C（加 S 時） | BIC Rd, Rn, Op2 | 位元清除：Rd = Rn AND NOT Op2，用來把指定位元清為 0。 | 3:{0} ← {1} AND NOT {2} || 2:{0} ← {0} AND NOT {1}
+ORN | 邏輯 | N Z C（加 S 時） | ORN Rd, Rn, Op2 | （Thumb-2）Rd = Rn OR NOT Op2。 | 3:{0} ← {1} OR NOT {2}
+LSL | 移位 | N Z C（加 S 時） | LSL Rd, Rm, #n | 邏輯左移（等於乘以 2^n）。 | 3:{0} ← {1} << {2} || 2:{0} ← {0} << {1}
+LSR | 移位 | N Z C（加 S 時） | LSR Rd, Rm, #n | 邏輯右移，左邊補 0（無號除以 2^n）。 | 3:{0} ← {1} >> {2}（補 0） || 2:{0} ← {0} >> {1}（補 0）
+ASR | 移位 | N Z C（加 S 時） | ASR Rd, Rm, #n | 算術右移，左邊補符號位元（有號除以 2^n）。 | 3:{0} ← {1} >> {2}（補符號位元） || 2:{0} ← {0} >> {1}（補符號位元）
+ROR | 旋轉 | N Z C（加 S 時） | ROR Rd, Rm, #n | 循環右移。 | 3:{0} ← 循環右移({1}, {2}) || 2:{0} ← 循環右移({0}, {1})
+CMP | 比較 | N Z C V | CMP Rn, Op2 | 計算 Rn - Op2，只更新旗標；之後接條件指令（BEQ、BGT、MOVLT…）。 | 計算 {0} - {1}（只設定旗標）
+CMN | 比較 | N Z C V | CMN Rn, Op2 | 計算 Rn + Op2，只更新旗標（與負數比較時使用）。 | 計算 {0} + {1}（只設定旗標）
+TST | 比較 | N Z C | TST Rn, Op2 | 計算 Rn AND Op2，只更新旗標，用來測試某些位元是否為 1。 | 計算 {0} AND {1}（只設定旗標）
+TEQ | 比較 | N Z C | TEQ Rn, Op2 | 計算 Rn XOR Op2，只更新旗標，用來判斷是否相等。 | 計算 {0} XOR {1}（只設定旗標）
+LDR | 載入/儲存 | 無 | LDR Rd, [Rn, #off] | 從記憶體載入 32 位元字組。LDR Rd, =常數 是虛擬指令，可以載入任意 32 位元常數或標籤位址。 | {0} ← 記憶體[{1}]
+LDRB | 載入/儲存 | 無 | LDRB Rd, [Rn] | 載入 1 個位元組，高位元補 0。 | {0} ← 位元組[{1}]
+LDRH | 載入/儲存 | 無 | LDRH Rd, [Rn] | 載入 16 位元半字組，高位元補 0。 | {0} ← 半字組[{1}]
+LDRSB | 載入/儲存 | 無 | LDRSB Rd, [Rn] | 載入有號位元組並做符號延伸。 | {0} ← 符號延伸(位元組[{1}])
+LDRSH | 載入/儲存 | 無 | LDRSH Rd, [Rn] | 載入有號半字組並做符號延伸。 | {0} ← 符號延伸(半字組[{1}])
+STR | 載入/儲存 | 無 | STR Rd, [Rn, #off] | 把 Rd 的 32 位元值存到記憶體。注意：來源暫存器寫在前面，位址寫在後面。 | 記憶體[{1}] ← {0}
+STRB | 載入/儲存 | 無 | STRB Rd, [Rn] | 把 Rd 的低 8 位元存到記憶體。 | 位元組[{1}] ← {0} 的低 8 位元
+STRH | 載入/儲存 | 無 | STRH Rd, [Rn] | 把 Rd 的低 16 位元存到記憶體。 | 半字組[{1}] ← {0} 的低 16 位元
+LDM/LDMIA/LDMFD | 載入/儲存 | 無 | LDMIA Rn!, {reglist} | 從 Rn 指向的記憶體連續載入多個暫存器；加 ! 會更新 Rn。 | {1} ← 記憶體[{0} 開始]
+STM/STMIA/STMEA/STMDB/STMFD | 載入/儲存 | 無 | STMDB SP!, {reglist} | 把多個暫存器連續存入記憶體。 | 記憶體[{0}] ← {1}
+PUSH | 堆疊 | 無 | PUSH {reglist} | 把暫存器清單推入堆疊（等同 STMDB SP!, {...}），常見寫法 PUSH {R4-R7, LR}。 | 堆疊 ← {0}
+POP | 堆疊 | 無 | POP {reglist} | 從堆疊取回暫存器；POP {..., PC} 可以同時從函式返回。 | {0} ← 堆疊
+B | 流程控制 | 無 | B label ／ BEQ label | 跳躍；加條件碼就是條件跳躍，例如 BEQ（Z=1）、BNE（Z=0）、BGT、BLT、BGE、BLE（有號），BHI、BLO、BHS、BLS（無號）。 | 跳到 {0}（條件成立時）
+BL | 副程式 | 無 | BL label | 呼叫副程式：返回位址存到 LR（R14），再跳到 label。 | LR ← 返回位址；跳到 {0}
+BX | 流程控制 | 無 | BX Rm | 跳到暫存器中的位址（可切換 ARM/Thumb 狀態）；BX LR 表示從副程式返回。 | 跳到 {0} 所存的位址
+BLX | 副程式 | 無 | BLX Rm | 透過暫存器呼叫副程式，返回位址存入 LR。 | LR ← 返回位址；跳到 {0}
+CBZ | 條件跳躍 | 無 | CBZ Rn, label | （Thumb-2）Rn = 0 時跳躍，不影響旗標。 | 若 {0} = 0 跳到 {1}
+CBNZ | 條件跳躍 | 無 | CBNZ Rn, label | （Thumb-2）Rn ≠ 0 時跳躍。 | 若 {0} ≠ 0 跳到 {1}
+IT/ITT/ITE/ITTT/ITTE/ITET/ITEE | 條件執行 | 無 | IT cond | （Thumb-2）讓後面 1～4 條指令依條件執行（T=條件成立時執行、E=不成立時執行）。 | 後續指令依條件 {0} 執行
+ADR | 載入/儲存 | 無 | ADR Rd, label | 把 label 的位址（以 PC 為基準計算）放進 Rd。 | {0} ← 位址({1})
+SVC/SWI | 系統呼叫 | 無 | SVC #n | 軟體中斷／系統呼叫（Linux ARM EABI：R7 放系統呼叫號碼，R0～R6 放參數）。 | 系統呼叫 {0}
+MRS | 系統 | 無 | MRS Rd, CPSR | 讀取程式狀態暫存器。 | {0} ← {1}
+MSR | 系統 | 依內容 | MSR CPSR_c, Rm | 寫入程式狀態暫存器。 | {0} ← {1}
+CPSID | 系統 | 無 | CPSID i | 關閉中斷。 | 禁止中斷
+CPSIE | 系統 | 無 | CPSIE i | 開啟中斷。 | 允許中斷
+WFI | 系統 | 無 | WFI | 等待中斷（進入低功耗狀態）。 | 等待中斷
+NOP | 其他 | 無 | NOP | 不做事。 | 不做事
+CLZ | 位元 | 無 | CLZ Rd, Rm | 計算 Rm 前導 0 的個數。 | {0} ← 前導 0 個數({1})
+REV | 資料搬移 | 無 | REV Rd, Rm | 反轉位元組順序（大小端轉換）。 | {0} ← 位元組反轉({1})
+UXTB | 型態轉換 | 無 | UXTB Rd, Rm | 取 Rm 的低 8 位元並零延伸。 | {0} ← 零延伸({1} 的低 8 位元)
+UXTH | 型態轉換 | 無 | UXTH Rd, Rm | 取 Rm 的低 16 位元並零延伸。 | {0} ← 零延伸({1} 的低 16 位元)
+SXTB | 型態轉換 | 無 | SXTB Rd, Rm | 取 Rm 的低 8 位元並符號延伸。 | {0} ← 符號延伸({1} 的低 8 位元)
+SXTH | 型態轉換 | 無 | SXTH Rd, Rm | 取 Rm 的低 16 位元並符號延伸。 | {0} ← 符號延伸({1} 的低 16 位元)

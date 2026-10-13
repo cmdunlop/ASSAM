@@ -1,0 +1,70 @@
+﻿# MIPS32 指令資料（含 MARS/SPIM 常用虛擬指令）
+@arch mips
+@name MIPS32
+
+ADD | 算術 | 溢位時產生例外 | add rd, rs, rt | rd = rs + rt（有號，溢位會產生例外）。 | {0} ← {1} + {2}
+ADDU | 算術 | 無 | addu rd, rs, rt | rd = rs + rt（不檢查溢位）。 | {0} ← {1} + {2}
+ADDI | 算術 | 溢位時產生例外 | addi rt, rs, imm | rt = rs + 16 位元有號立即值。 | {0} ← {1} + {2}
+ADDIU | 算術 | 無 | addiu rt, rs, imm | 同 addi 但不檢查溢位（最常用來加常數或調整 $sp）。 | {0} ← {1} + {2}
+SUB | 算術 | 溢位時產生例外 | sub rd, rs, rt | rd = rs - rt。 | {0} ← {1} - {2}
+SUBU | 算術 | 無 | subu rd, rs, rt | rd = rs - rt（不檢查溢位）。 | {0} ← {1} - {2}
+MULT | 算術 | 無 | mult rs, rt | 有號乘法，64 位元乘積放在 HI:LO。 | HI:LO ← {0} × {1}
+MULTU | 算術 | 無 | multu rs, rt | 無號乘法，乘積放在 HI:LO。 | HI:LO ← {0} × {1}（無號）
+MUL | 算術 | 無 | mul rd, rs, rt | 乘積的低 32 位元放進 rd（MIPS32）。 | {0} ← {1} × {2}
+DIV | 算術 | 無 | div rs, rt | 有號除法：LO = 商、HI = 餘數。三個運算元的 div rd, rs, rt 是虛擬指令。 | 2:LO ← {0} ÷ {1}；HI ← {0} mod {1} || 3:{0} ← {1} ÷ {2}
+DIVU | 算術 | 無 | divu rs, rt | 無號除法：LO = 商、HI = 餘數。 | 2:LO ← {0} ÷ {1}；HI ← {0} mod {1}（無號） || 3:{0} ← {1} ÷ {2}（無號）
+MFHI | 資料搬移 | 無 | mfhi rd | 讀取 HI（乘法高位或除法餘數）。 | {0} ← HI
+MFLO | 資料搬移 | 無 | mflo rd | 讀取 LO（乘法低位或除法商）。 | {0} ← LO
+MTHI | 資料搬移 | 無 | mthi rs | 寫入 HI。 | HI ← {0}
+MTLO | 資料搬移 | 無 | mtlo rs | 寫入 LO。 | LO ← {0}
+AND | 邏輯 | 無 | and rd, rs, rt | 逐位元 AND。 | {0} ← {1} AND {2}
+ANDI | 邏輯 | 無 | andi rt, rs, imm | 和立即值做 AND（立即值零延伸），andi $t0, $t0, 1 可判斷奇偶。 | {0} ← {1} AND {2}
+OR | 邏輯 | 無 | or rd, rs, rt | 逐位元 OR。 | {0} ← {1} OR {2}
+ORI | 邏輯 | 無 | ori rt, rs, imm | 和立即值做 OR（立即值零延伸）。 | {0} ← {1} OR {2}
+XOR | 邏輯 | 無 | xor rd, rs, rt | 逐位元 XOR。 | {0} ← {1} XOR {2}
+XORI | 邏輯 | 無 | xori rt, rs, imm | 和立即值做 XOR。 | {0} ← {1} XOR {2}
+NOR | 邏輯 | 無 | nor rd, rs, rt | rd = NOT(rs OR rt)；nor rd, rs, $zero 等於 NOT。 | {0} ← NOT({1} OR {2})
+NOT | 虛擬指令 | 無 | not rd, rs | 逐位元取反（展開成 nor）。 | {0} ← NOT {1}
+NEG | 虛擬指令 | 無 | neg rd, rs | 變號（展開成 sub rd, $zero, rs）。 | {0} ← -{1}
+SLL | 移位 | 無 | sll rd, rt, sa | 邏輯左移（乘以 2^sa）；sll $zero, $zero, 0 就是 nop。 | {0} ← {1} << {2}
+SRL | 移位 | 無 | srl rd, rt, sa | 邏輯右移，左邊補 0。 | {0} ← {1} >> {2}（補 0）
+SRA | 移位 | 無 | sra rd, rt, sa | 算術右移，左邊補符號位元。 | {0} ← {1} >> {2}（補符號位元）
+SLLV | 移位 | 無 | sllv rd, rt, rs | 左移，位移量放在暫存器 rs。 | {0} ← {1} << {2}
+SRLV | 移位 | 無 | srlv rd, rt, rs | 邏輯右移，位移量放在暫存器。 | {0} ← {1} >> {2}（補 0）
+SRAV | 移位 | 無 | srav rd, rt, rs | 算術右移，位移量放在暫存器。 | {0} ← {1} >> {2}（補符號位元）
+SLT | 比較 | 無 | slt rd, rs, rt | rs < rt（有號）時 rd = 1，否則 rd = 0；搭配 beq/bne 完成大小比較。 | {0} ← ({1} < {2}) ? 1 : 0
+SLTU | 比較 | 無 | sltu rd, rs, rt | 無號比較版本的 slt。 | {0} ← ({1} < {2}，無號) ? 1 : 0
+SLTI | 比較 | 無 | slti rt, rs, imm | rs < 立即值（有號）時 rt = 1。 | {0} ← ({1} < {2}) ? 1 : 0
+SLTIU | 比較 | 無 | sltiu rt, rs, imm | 無號版本的 slti。 | {0} ← ({1} < {2}，無號) ? 1 : 0
+LW | 載入/儲存 | 無 | lw rt, offset(rs) | 從位址 rs + offset 載入 32 位元字組（位址必須是 4 的倍數）。 | {0} ← 記憶體[{1}]
+LH | 載入/儲存 | 無 | lh rt, offset(rs) | 載入 16 位元並符號延伸。 | {0} ← 符號延伸(半字組[{1}])
+LHU | 載入/儲存 | 無 | lhu rt, offset(rs) | 載入 16 位元並零延伸。 | {0} ← 半字組[{1}]
+LB | 載入/儲存 | 無 | lb rt, offset(rs) | 載入 1 個位元組並符號延伸（讀字串字元時常用 lbu）。 | {0} ← 符號延伸(位元組[{1}])
+LBU | 載入/儲存 | 無 | lbu rt, offset(rs) | 載入 1 個位元組並零延伸。 | {0} ← 位元組[{1}]
+SW | 載入/儲存 | 無 | sw rt, offset(rs) | 把 rt 存到位址 rs + offset。 | 記憶體[{1}] ← {0}
+SH | 載入/儲存 | 無 | sh rt, offset(rs) | 存 rt 的低 16 位元。 | 半字組[{1}] ← {0}
+SB | 載入/儲存 | 無 | sb rt, offset(rs) | 存 rt 的低 8 位元。 | 位元組[{1}] ← {0}
+LUI | 資料搬移 | 無 | lui rt, imm | 把 16 位元立即值放到 rt 的高 16 位元，低 16 位元補 0。 | {0} ← {1} << 16
+LI | 虛擬指令 | 無 | li rt, imm | 載入立即值（組譯器展開成 lui/ori 或 addiu）。 | {0} ← {1}
+LA | 虛擬指令 | 無 | la rt, label | 載入標籤的位址。 | {0} ← 位址({1})
+MOVE | 虛擬指令 | 無 | move rd, rs | 複製暫存器（展開成 addu rd, rs, $zero）。 | {0} ← {1}
+BEQ | 條件跳躍 | 無 | beq rs, rt, label | rs = rt 時跳躍。 | 若 {0} = {1} 跳到 {2}
+BNE | 條件跳躍 | 無 | bne rs, rt, label | rs ≠ rt 時跳躍。 | 若 {0} ≠ {1} 跳到 {2}
+BGTZ | 條件跳躍 | 無 | bgtz rs, label | rs > 0 時跳躍。 | 若 {0} > 0 跳到 {1}
+BLEZ | 條件跳躍 | 無 | blez rs, label | rs ≤ 0 時跳躍。 | 若 {0} ≤ 0 跳到 {1}
+BLTZ | 條件跳躍 | 無 | bltz rs, label | rs < 0 時跳躍。 | 若 {0} < 0 跳到 {1}
+BGEZ | 條件跳躍 | 無 | bgez rs, label | rs ≥ 0 時跳躍。 | 若 {0} ≥ 0 跳到 {1}
+BLT | 虛擬指令 | 無 | blt rs, rt, label | rs < rt 時跳躍（展開成 slt + bne）。 | 若 {0} < {1} 跳到 {2}
+BGT | 虛擬指令 | 無 | bgt rs, rt, label | rs > rt 時跳躍。 | 若 {0} > {1} 跳到 {2}
+BLE | 虛擬指令 | 無 | ble rs, rt, label | rs ≤ rt 時跳躍。 | 若 {0} ≤ {1} 跳到 {2}
+BGE | 虛擬指令 | 無 | bge rs, rt, label | rs ≥ rt 時跳躍。 | 若 {0} ≥ {1} 跳到 {2}
+BEQZ | 虛擬指令 | 無 | beqz rs, label | rs = 0 時跳躍。 | 若 {0} = 0 跳到 {1}
+BNEZ | 虛擬指令 | 無 | bnez rs, label | rs ≠ 0 時跳躍。 | 若 {0} ≠ 0 跳到 {1}
+B | 虛擬指令 | 無 | b label | 無條件跳躍（相對位址）。 | 跳到 {0}
+J | 流程控制 | 無 | j target | 無條件跳躍。 | 跳到 {0}
+JAL | 副程式 | 無 | jal target | 呼叫函式：返回位址存入 $ra，再跳到 target。 | $ra ← 返回位址；跳到 {0}
+JR | 流程控制 | 無 | jr rs | 跳到暫存器中的位址；jr $ra 就是函式返回。 | 跳到 {0}
+JALR | 副程式 | 無 | jalr rs | 透過暫存器呼叫函式，返回位址存入 $ra。 | $ra ← 返回位址；跳到 {0}
+SYSCALL | 系統呼叫 | 無 | syscall | 依 $v0 的服務號碼執行系統服務（MARS/SPIM：1 印整數、4 印字串、5 讀整數、8 讀字串、10 結束、11 印字元）。 | 系統呼叫（$v0 = 服務號碼）
+BREAK | 系統 | 無 | break | 產生中斷點例外。 | 中斷點
+NOP | 其他 | 無 | nop | 不做事（常用來填分支延遲槽）。 | 不做事

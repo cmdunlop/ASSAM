@@ -1,0 +1,58 @@
+﻿# ARM64（AArch64）指令資料
+# X0～X30 為 64 位元暫存器，W0～W30 為其低 32 位元；XZR/WZR 為零暫存器；X30 = LR，X29 = FP。
+@arch arm64
+@name ARM64（AArch64）
+
+MOV | 資料搬移 | 無 | MOV Xd, Xn ／ MOV Xd, #imm | 搬移暫存器或立即值（X 為 64 位元、W 為 32 位元；寫入 W 暫存器會把高 32 位元清 0）。 | {0} ← {1}
+MOVZ | 資料搬移 | 無 | MOVZ Xd, #imm16, LSL #s | 把 16 位元立即值放到指定位置，其他位元清 0。 | {0} ← {1}（其餘位元清 0）
+MOVK | 資料搬移 | 無 | MOVK Xd, #imm16, LSL #s | 只替換指定的 16 位元，其他位元保留（用來組合 64 位元常數）。 | {0} 的部分位元 ← {1}
+MVN | 資料搬移 | 無 | MVN Xd, Xm | 逐位元取反。 | {0} ← NOT {1}
+ADD | 算術 | 無 | ADD Xd, Xn, Op2 | 加法：Xd = Xn + Op2。 | {0} ← {1} + {2}
+ADDS | 算術 | N Z C V | ADDS Xd, Xn, Op2 | 加法並更新旗標。 | {0} ← {1} + {2}（更新旗標）
+SUB | 算術 | 無 | SUB Xd, Xn, Op2 | 減法：Xd = Xn - Op2；SUB SP, SP, #16 用來配置堆疊空間。 | {0} ← {1} - {2}
+SUBS | 算術 | N Z C V | SUBS Xd, Xn, Op2 | 減法並更新旗標。 | {0} ← {1} - {2}（更新旗標）
+NEG | 算術 | 無 | NEG Xd, Xm | 變號：Xd = 0 - Xm。 | {0} ← -{1}
+MUL | 算術 | 無 | MUL Xd, Xn, Xm | 乘法（保留低位）。 | {0} ← {1} × {2}
+MADD | 算術 | 無 | MADD Xd, Xn, Xm, Xa | 乘加：Xd = Xa + Xn × Xm。 | {0} ← {3} + {1} × {2}
+MSUB | 算術 | 無 | MSUB Xd, Xn, Xm, Xa | 乘減：Xd = Xa - Xn × Xm，常與 SDIV 配合求餘數。 | {0} ← {3} - {1} × {2}
+SDIV | 算術 | 無 | SDIV Xd, Xn, Xm | 有號除法（除以 0 結果為 0，不會產生例外）。 | {0} ← {1} ÷ {2}（有號）
+UDIV | 算術 | 無 | UDIV Xd, Xn, Xm | 無號除法。 | {0} ← {1} ÷ {2}（無號）
+AND | 邏輯 | 無 | AND Xd, Xn, Op2 | 逐位元 AND。 | {0} ← {1} AND {2}
+ANDS | 邏輯 | N Z C V | ANDS Xd, Xn, Op2 | 逐位元 AND 並更新旗標。 | {0} ← {1} AND {2}（更新旗標）
+ORR | 邏輯 | 無 | ORR Xd, Xn, Op2 | 逐位元 OR。 | {0} ← {1} OR {2}
+EOR | 邏輯 | 無 | EOR Xd, Xn, Op2 | 逐位元 XOR。 | {0} ← {1} XOR {2}
+BIC | 邏輯 | 無 | BIC Xd, Xn, Op2 | 位元清除：Xd = Xn AND NOT Op2。 | {0} ← {1} AND NOT {2}
+LSL | 移位 | 無 | LSL Xd, Xn, #n | 邏輯左移。 | {0} ← {1} << {2}
+LSR | 移位 | 無 | LSR Xd, Xn, #n | 邏輯右移。 | {0} ← {1} >> {2}（補 0）
+ASR | 移位 | 無 | ASR Xd, Xn, #n | 算術右移。 | {0} ← {1} >> {2}（補符號位元）
+ROR | 旋轉 | 無 | ROR Xd, Xn, #n | 循環右移。 | {0} ← 循環右移({1}, {2})
+CMP | 比較 | N Z C V | CMP Xn, Op2 | 計算 Xn - Op2 只更新旗標（等同 SUBS XZR, Xn, Op2）。 | 計算 {0} - {1}（只設定旗標）
+CMN | 比較 | N Z C V | CMN Xn, Op2 | 計算 Xn + Op2 只更新旗標。 | 計算 {0} + {1}（只設定旗標）
+TST | 比較 | N Z C V | TST Xn, Op2 | 計算 Xn AND Op2 只更新旗標。 | 計算 {0} AND {1}（只設定旗標）
+LDR | 載入/儲存 | 無 | LDR Xt, [Xn, #off] | 從記憶體載入（X 暫存器 8 位元組、W 暫存器 4 位元組）。[Xn, #off]! 為前索引回寫，[Xn], #off 為後索引。 | {0} ← 記憶體[{1}]
+LDRB | 載入/儲存 | 無 | LDRB Wt, [Xn] | 載入 1 個位元組（零延伸）。 | {0} ← 位元組[{1}]
+LDRH | 載入/儲存 | 無 | LDRH Wt, [Xn] | 載入 2 個位元組（零延伸）。 | {0} ← 半字組[{1}]
+LDRSW | 載入/儲存 | 無 | LDRSW Xt, [Xn] | 載入 32 位元有號數並符號延伸到 64 位元。 | {0} ← 符號延伸(字組[{1}])
+STR | 載入/儲存 | 無 | STR Xt, [Xn, #off] | 把暫存器存到記憶體。 | 記憶體[{1}] ← {0}
+STRB | 載入/儲存 | 無 | STRB Wt, [Xn] | 存 1 個位元組。 | 位元組[{1}] ← {0}
+STRH | 載入/儲存 | 無 | STRH Wt, [Xn] | 存 2 個位元組。 | 半字組[{1}] ← {0}
+LDP | 載入/儲存 | 無 | LDP Xt1, Xt2, [Xn, #off] | 一次載入兩個暫存器，常見 LDP X29, X30, [SP], #16（還原 FP 與 LR）。 | {0}, {1} ← 記憶體[{2}]
+STP | 載入/儲存 | 無 | STP Xt1, Xt2, [Xn, #off]! | 一次儲存兩個暫存器，常見 STP X29, X30, [SP, #-16]!（函式開頭保存 FP 與 LR）。 | 記憶體[{2}] ← {0}, {1}
+ADR | 載入/儲存 | 無 | ADR Xd, label | 取得 label 的位址（±1MB 範圍）。 | {0} ← 位址({1})
+ADRP | 載入/儲存 | 無 | ADRP Xd, label | 取得 label 所在 4KB 分頁的位址，通常再搭配 ADD Xd, Xd, :lo12:label。 | {0} ← 分頁位址({1})
+B | 流程控制 | 無 | B label | 無條件跳躍。 | 跳到 {0}
+B.cond | 條件跳躍 | 無 | B.EQ label | 依旗標條件跳躍：B.EQ、B.NE、B.GT、B.LT、B.GE、B.LE（有號），B.HI、B.LO、B.HS、B.LS（無號）。 | 若條件成立跳到 {0}
+BL | 副程式 | 無 | BL label | 呼叫函式：返回位址存入 X30（LR）。 | X30 ← 返回位址；跳到 {0}
+BR | 流程控制 | 無 | BR Xn | 跳到暫存器中的位址。 | 跳到 {0}
+BLR | 副程式 | 無 | BLR Xn | 透過暫存器呼叫函式。 | X30 ← 返回位址；跳到 {0}
+RET | 副程式 | 無 | RET | 跳回 X30（LR）中的返回位址。 | 返回（跳到 X30）
+CBZ | 條件跳躍 | 無 | CBZ Xt, label | Xt = 0 時跳躍。 | 若 {0} = 0 跳到 {1}
+CBNZ | 條件跳躍 | 無 | CBNZ Xt, label | Xt ≠ 0 時跳躍。 | 若 {0} ≠ 0 跳到 {1}
+TBZ | 條件跳躍 | 無 | TBZ Xt, #bit, label | 指定位元為 0 時跳躍。 | 若 {0} 的第 {1} 位元 = 0 跳到 {2}
+TBNZ | 條件跳躍 | 無 | TBNZ Xt, #bit, label | 指定位元為 1 時跳躍。 | 若 {0} 的第 {1} 位元 = 1 跳到 {2}
+CSEL | 條件選擇 | 無 | CSEL Xd, Xn, Xm, cond | 條件成立取 Xn，否則取 Xm（不需要分支）。 | {0} ← ({3}) ? {1} : {2}
+CSET | 條件選擇 | 無 | CSET Xd, cond | 條件成立設為 1，否則為 0。 | {0} ← ({1}) ? 1 : 0
+CINC | 條件選擇 | 無 | CINC Xd, Xn, cond | 條件成立時 Xd = Xn + 1，否則 Xd = Xn。 | {0} ← ({2}) ? {1} + 1 : {1}
+SXTW | 型態轉換 | 無 | SXTW Xd, Wn | 把 32 位元有號數符號延伸成 64 位元。 | {0} ← 符號延伸({1})
+SVC | 系統呼叫 | 無 | SVC #0 | 系統呼叫（Linux：X8 放呼叫號碼，X0～X5 放參數；64 = write、93 = exit）。 | 系統呼叫（X8 = 號碼）
+NOP | 其他 | 無 | NOP | 不做事。 | 不做事
