@@ -613,6 +613,7 @@ namespace Assam.Core.Simulation
                     return new SymbolValue { Value = (long)CodeAddress(idx), IsCodeLabel = true, Display = name };
                 if (name.Equals("@data", StringComparison.OrdinalIgnoreCase)) return new SymbolValue { Value = 0x0B00, Display = "@data(0x0B00)" };
                 if (name == "$") return new SymbolValue { Value = (long)CodeAddress(_ip), Display = "$" };
+                if (name.StartsWith("__imp_", StringComparison.OrdinalIgnoreCase)) return ImportSlotSymbol(name);
                 return null;
             }
 
@@ -887,7 +888,10 @@ namespace Assam.Core.Simulation
                     case "cdq": ExtendPair("eax", "edx"); return;
                     case "cqo": ExtendPair("rax", "rdx"); return;
                     case "bswap": Bswap(ins); return;
-                    case "jmp": Jump(ins, ref next, true, "無條件跳躍"); return;
+                    case "jmp":
+                        if (JumpExternal(ins, ref next)) return;
+                        Jump(ins, ref next, true, "無條件跳躍");
+                        return;
                     case "jcxz": JumpIfZero(ins, ref next, "cx"); return;
                     case "jecxz": JumpIfZero(ins, ref next, "ecx"); return;
                     case "jrcxz": JumpIfZero(ins, ref next, "rcx"); return;
@@ -1475,7 +1479,11 @@ namespace Assam.Core.Simulation
                 if (_codeLabels.TryGetValue(target, out idx)) return idx;
                 if (target == "$") return _ip;
                 if (Regex.IsMatch(target, @"^[A-Za-z_.@?][\w.@?]*$") && !Registers.ContainsKey(target) && !_data.ContainsKey(target))
+                {
+                    if (LibraryCalls.IsDisassemblerSymbol(target))
+                        throw new SimulationException("找不到標籤「" + target + "」：它是反組譯器產生的位置名稱，但這個位置不在這段程式中（反組譯時只取出了部分程式），無法繼續模擬");
                     throw new SimulationException("找不到標籤或副程式「" + target + "」");
+                }
                 // 間接跳躍：JMP EAX、JMP [table+...]
                 var op = ParseOperand(target, _bits);
                 ulong address = op.Kind == OpKind.Immediate ? op.Imm : Get(op);
@@ -1540,7 +1548,12 @@ namespace Assam.Core.Simulation
             {
                 if (ins.Ops.Count < 1) throw new SimulationException("CALL 需要目標");
                 string target = ins.Ops[0].Trim();
-                if (CallLibrary(target)) return;
+                string external = ExternalName(target) ?? IndirectApi(target) ?? ForeignFunctionPointer(target, false);
+                if (external != null)
+                {
+                    CallExternal(ins, target, external, false, null, ref next);
+                    return;
+                }
                 int idx = ResolveTarget(ins);
                 PushValue(CodeAddress(_ip + 1), _bits, "返回位址 " + AsmNumber.Hex(CodeAddress(_ip + 1), _bits) + "（" + LineOf(_ip + 1) + "）");
                 next = idx;
@@ -1551,10 +1564,16 @@ namespace Assam.Core.Simulation
             {
                 if (ins.Ops.Count < 1) throw new SimulationException("INVOKE 需要程序名稱");
                 string target = ins.Ops[0].Trim();
-                // INVOKE 參數由右到左推入堆疊（stdcall），這裡只支援函式庫與 ExitProcess
-                if (ins.Ops.Count > 1 && !LibraryName(target).Equals("ExitProcess", StringComparison.OrdinalIgnoreCase))
+                // 函式庫與外部 API：參數直接從 INVOKE 的運算元計算，不經過堆疊
+                string external = ExternalName(target);
+                if (external != null)
+                {
+                    CallExternal(ins, target, external, false, ins.Ops, ref next);
+                    return;
+                }
+                // 自己寫的程序：INVOKE 參數應由右到左推入堆疊（stdcall），模擬器簡化處理
+                if (ins.Ops.Count > 1)
                     _result.Messages.Add("第 " + ins.Line.LineNumber + " 行：INVOKE 的參數沒有推入堆疊（模擬器簡化處理）。");
-                if (CallLibrary(target)) return;
                 var fake = new Instr { Line = ins.Line, Mn = "call", Ops = new List<string> { target } };
                 Call(fake, ref next);
             }
@@ -1829,18 +1848,503 @@ namespace Assam.Core.Simulation
                 }
             }
 
-            private static string LibraryName(string target)
+            // -----------------------------------------------------------------
+            // 外部函式：匯入表（[__imp_X]）、Win32 API、C 函式庫、Irvine32
+            // -----------------------------------------------------------------
+
+            private const int MaxImportSlots = 512;
+            private const int MaxFormatLength = 4096;
+            private static readonly Regex JumpSizeRegex = new Regex(@"^(short|near|far)\s+(ptr\s+)?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            private static readonly Regex PlainSymbolRegex = new Regex(@"^[A-Za-z_.@?$][\w.@?$]*$", RegexOptions.Compiled);
+            private static readonly Regex StdcallDecorationRegex = new Regex(@"@\d{1,4}$", RegexOptions.Compiled);
+
+            private readonly Dictionary<string, ulong> _importSlots = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<ulong, string> _apiAddresses = new Dictionary<ulong, string>();
+            private readonly HashSet<string> _reportedExternal = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            /// <summary>INVOKE 的運算元（第 0 個是函式名稱）；null 表示參數要從堆疊或暫存器讀取。</summary>
+            private List<string> _invokeArgs;
+            /// <summary>讀取堆疊參數時要先跳過的位元組數（經由匯入跳板 jmp 進來時，堆疊頂端是返回位址）。</summary>
+            private ulong _argSkip;
+
+            private int PointerBytes
             {
-                string n = target.Trim().TrimStart('_');
-                int at = n.IndexOf('@');
-                if (at > 0) n = n.Substring(0, at);
-                return n;
+                get { return _bits == 64 ? 8 : _bits == 16 ? 2 : 4; }
             }
 
-            private bool CallLibrary(string target)
+            /// <summary>
+            /// __imp_X 當作資料使用時（例如 mov esi, dword ptr [__imp_printf]），配置一個模擬的 IAT 槽位，
+            /// 裡面放一個代表該 API 的假位址，之後 call esi 就能認出是哪個函式。
+            /// </summary>
+            private SymbolValue ImportSlotSymbol(string name)
             {
-                string name = LibraryName(target);
-                if (_codeLabels.ContainsKey(target)) return false; // 使用者自己定義的同名程序優先
+                int size = PointerBytes;
+                ulong slot;
+                if (!_importSlots.TryGetValue(name, out slot))
+                {
+                    int limit = _bits == 16 ? 100 : MaxImportSlots;
+                    if (_importSlots.Count >= limit) return null;
+                    int k = _importSlots.Count;
+                    ulong slotBase = _bits == 64 ? 0x00007FFD00000000UL : _bits == 16 ? 0xE000UL : 0x7FFD0000UL;
+                    ulong apiBase = _bits == 64 ? 0x00007FFE00000000UL : _bits == 16 ? 0xF000UL : 0x7FFE0000UL;
+                    slot = slotBase + (ulong)(k * size);
+                    ulong fn = apiBase + (ulong)(k * 16);
+                    _importSlots[name] = slot;
+                    _apiAddresses[fn] = LibraryCalls.Normalize(name) ?? name;
+                    // 相當於 Windows 載入程式時把 API 位址填進 IAT（不列入「記憶體變化」）
+                    for (int i = 0; i < size; i++) _mem[slot + (ulong)i] = (byte)(fn >> (8 * i));
+                }
+                return new SymbolValue
+                {
+                    Value = (long)slot, IsDataLabel = true, ElementSize = size, Length = 1,
+                    Display = name + "(IAT 槽位 " + AsmNumber.Hex(slot, AddrBits) + ")"
+                };
+            }
+
+            private static string StripJumpSize(string target)
+            {
+                return JumpSizeRegex.Replace(target.Trim(), string.Empty).Trim();
+            }
+
+            /// <summary>
+            /// 若 CALL／JMP／INVOKE 的目標是外部函式（[__imp_X]、已知的 API 或函式庫、X@8、反組譯器的 sub_／j_ 名稱且不在程式中），
+            /// 傳回正規化後的名稱；否則傳回 null（照一般標籤處理）。使用者自己定義的同名程序優先。
+            /// </summary>
+            private string ExternalName(string target)
+            {
+                string t = StripJumpSize(target);
+                if (t.Length == 0 || _codeLabels.ContainsKey(t)) return null;
+                if (LibraryCalls.IsImportReference(t)) return LibraryCalls.Normalize(t) ?? t;
+                if (!PlainSymbolRegex.IsMatch(t) || Registers.ContainsKey(t) || _data.ContainsKey(t) || _constants.ContainsKey(t)) return null;
+                string name = LibraryCalls.Normalize(t);
+                if (name == null) return null;
+                if (LibraryCalls.Describe(t) != null) return name;
+                if (t.StartsWith("loc_", StringComparison.Ordinal) || t.StartsWith("locret_", StringComparison.Ordinal)) return null;
+                if (LibraryCalls.IsDisassemblerSymbol(t)) return t.StartsWith("j_", StringComparison.Ordinal) ? name : t;
+                if (StdcallDecorationRegex.IsMatch(t)) return name; // X@8：stdcall 修飾過的外部函式
+                return null;
+            }
+
+            /// <summary>CALL ESI、CALL [EBX] 這類間接呼叫：若算出的位址是模擬 IAT 中的 API，傳回 API 名稱。</summary>
+            private string IndirectApi(string target)
+            {
+                if (_apiAddresses.Count == 0) return null;
+                string t = StripJumpSize(target);
+                if (PlainSymbolRegex.IsMatch(t) && !Registers.ContainsKey(t)) return null;
+                try
+                {
+                    var op = ParseOperand(t, _bits);
+                    ulong address = (op.Kind == OpKind.Immediate ? op.Imm : Get(op)) & AsmNumber.Mask(AddrBits);
+                    string name;
+                    return _apiAddresses.TryGetValue(address, out name) ? name : null;
+                }
+                catch (SimulationException)
+                {
+                    return null;
+                }
+            }
+
+            /// <summary>
+            /// CALL DWORD PTR [data_404010] 這類「透過記憶體中的函式指標」呼叫：若讀出的位址不是程式中的指令，傳回顯示名稱（當作外部函式處理）；
+            /// 否則傳回 null。JMP 只接受方括號內沒有暫存器的寫法（跳躍表 jmp [eax*4+table] 不能當成函式呼叫）。
+            /// </summary>
+            private string ForeignFunctionPointer(string target, bool forJump)
+            {
+                string t = StripJumpSize(target);
+                int open = t.IndexOf('[');
+                int close = t.LastIndexOf(']');
+                if (open < 0 || close < open) return null;
+                string inner = t.Substring(open + 1, close - open - 1).Trim();
+                if (forJump)
+                {
+                    foreach (Match m in Regex.Matches(inner, @"[A-Za-z_][\w]*"))
+                        if (Registers.ContainsKey(m.Value)) return null;
+                }
+                try
+                {
+                    var op = ParseOperand(t, _bits);
+                    if (op.Kind != OpKind.Memory) return null;
+                    if (op.Bits == 0) op.Bits = _bits;
+                    ulong address = Get(op) & AsmNumber.Mask(AddrBits);
+                    if (AddressToIndex(address) >= 0) return null;
+                    return "[" + inner + "]（" + AsmNumber.Hex(address, AddrBits) + "）";
+                }
+                catch (SimulationException)
+                {
+                    return null;
+                }
+            }
+
+            private bool JumpExternal(Instr ins, ref int next)
+            {
+                if (ins.Ops.Count < 1) return false;
+                string target = ins.Ops[0].Trim();
+                string external = ExternalName(target) ?? IndirectApi(target) ?? ForeignFunctionPointer(target, true);
+                if (external == null) return false;
+                CallExternal(ins, target, external, true, null, ref next);
+                return true;
+            }
+
+            /// <summary>
+            /// 呼叫外部函式：不推入返回位址（外部函式不在程式中，直接繼續下一行）。有模擬的函式就執行它，
+            /// 否則記錄「未模擬」並把 EAX／RAX 設為 0。viaJump 為 true（匯入跳板 jmp [__imp_X] 或尾端跳躍）時等於 call + ret。
+            /// 32 位元 stdcall 函式（Win32 API、X@8）返回時會清掉參數，ESP 也要跟著加上參數大小。
+            /// </summary>
+            private void CallExternal(Instr ins, string rawTarget, string name, bool viaJump, List<string> invokeArgs, ref int next)
+            {
+                _invokeArgs = invokeArgs;
+                _argSkip = viaJump ? (ulong)PointerBytes : 0UL;
+                string desc = LibraryCalls.Describe(name);
+                string kind = LibraryCalls.IsImportReference(rawTarget) ? "匯入表中的外部函式 "
+                            : desc != null && desc.StartsWith("Irvine32", StringComparison.Ordinal) ? "Irvine32 程序 "
+                            : "外部函式 ";
+                _derivation.Add((viaJump ? "跳到" : "呼叫") + kind + name +
+                                (viaJump ? "（匯入跳板／尾端跳躍：等於呼叫後直接返回原呼叫者）" : "（不在程式中，模擬器直接處理，不推入返回位址）"));
+                try
+                {
+                    if (!CallLibrary(name))
+                    {
+                        string message = name.StartsWith("sub_", StringComparison.Ordinal)
+                            ? "副程式 " + name + " 不在這段程式中（反組譯時沒有一起取出），未模擬，假設回傳 0"
+                            : name.StartsWith("[", StringComparison.Ordinal)
+                            ? "透過函式指標 " + name + " 的間接呼叫：目標不在這段程式中（可能是外部函式或回呼函式），未模擬，假設回傳 0"
+                            : "外部函式 " + name + " 未模擬，假設回傳 0";
+                        WriteReg(Registers[_bits == 64 ? "rax" : "eax"], 0);
+                        _derivation.Add(message + "（" + (_bits == 64 ? "RAX" : "EAX") + " ← 0）");
+                        if (_reportedExternal.Add(name)) _result.Messages.Add(message + "。");
+                    }
+                }
+                finally
+                {
+                    _invokeArgs = null;
+                    _argSkip = 0;
+                }
+                if (_halt) return;
+
+                if (viaJump)
+                {
+                    var sp = StackReg;
+                    if (ReadReg(sp) >= _initialSp)
+                    {
+                        Halt("外部函式 " + name + " 返回作業系統，程式結束");
+                        return;
+                    }
+                    ulong address = PopValue(_bits);
+                    int idx = AddressToIndex(address);
+                    if (idx < 0) throw new SimulationException("外部函式 " + name + " 返回時取到的返回位址 " + AsmNumber.Hex(address, _bits) + " 不正確（堆疊不平衡？）");
+                    next = idx;
+                    _derivation.Add("外部函式返回到 " + LineOf(idx));
+                }
+
+                if (_bits == 32 && invokeArgs == null)
+                {
+                    int bytes = LibraryCalls.StdcallArgumentBytes(rawTarget);
+                    if (bytes < 0) bytes = LibraryCalls.StdcallArgumentBytes(name);
+                    if (bytes > 0)
+                    {
+                        var sp = StackReg;
+                        ulong old = ReadReg(sp);
+                        ulong nsp = (old + (ulong)bytes) & 0xFFFFFFFFUL;
+                        WriteReg(sp, nsp);
+                        _derivation.Add("stdcall：" + name + " 返回時用 RET " + bytes + " 清除 " + bytes + " 位元組參數 → ESP = " +
+                                        AsmNumber.Hex(old, 32) + " + " + bytes + " = " + AsmNumber.Hex(nsp, 32));
+                    }
+                }
+            }
+
+            /// <summary>第 k 個參數（從 0 起算）：INVOKE 運算元、x64 的 RCX／RDX／R8／R9 與 [RSP+20h]…，或 32／16 位元堆疊上的 cdecl 參數。</summary>
+            private ulong Arg(int k)
+            {
+                if (_invokeArgs != null)
+                    return k + 1 < _invokeArgs.Count ? EvaluateInvokeArg(_invokeArgs[k + 1]) : 0UL;
+                ulong sp = ReadReg(StackReg);
+                if (_bits == 64)
+                {
+                    switch (k)
+                    {
+                        case 0: return ReadReg(Registers["rcx"]);
+                        case 1: return ReadReg(Registers["rdx"]);
+                        case 2: return ReadReg(Registers["r8"]);
+                        case 3: return ReadReg(Registers["r9"]);
+                    }
+                    return ReadMem(sp + _argSkip + 0x20UL + 8UL * (ulong)(k - 4), 64);
+                }
+                ulong address = (sp + _argSkip + (ulong)(PointerBytes * k)) & AsmNumber.Mask(AddrBits);
+                return ReadMem(address, _bits);
+            }
+
+            private ulong EvaluateInvokeArg(string text)
+            {
+                string t = text.Trim();
+                try
+                {
+                    var op = ParseOperand(t, _bits);
+                    if (op.Kind == OpKind.Memory && op.Bits == 0) op.Bits = _bits;
+                    return op.Kind == OpKind.Immediate ? op.Imm & AsmNumber.Mask(_bits) : Get(op);
+                }
+                catch (SimulationException)
+                {
+                    // Windows 標頭檔常見的常數（沒有 INCLUDE windows.inc 時也能用）
+                    switch (t.ToUpperInvariant())
+                    {
+                        case "NULL": case "FALSE": case "MB_OK": return 0;
+                        case "TRUE": return 1;
+                        case "STD_INPUT_HANDLE": return unchecked((ulong)-10L) & AsmNumber.Mask(_bits);
+                        case "STD_OUTPUT_HANDLE": return unchecked((ulong)-11L) & AsmNumber.Mask(_bits);
+                        case "STD_ERROR_HANDLE": return unchecked((ulong)-12L) & AsmNumber.Mask(_bits);
+                    }
+                    _derivation.Add("無法計算 INVOKE 參數「" + t + "」，以 0 代替");
+                    return 0;
+                }
+            }
+
+            private void SetReturn(ulong value)
+            {
+                WriteReg(Registers[_bits == 64 ? "rax" : "eax"], value & AsmNumber.Mask(_bits == 64 ? 64 : 32));
+            }
+
+            /// <summary>C 的換行 \n 在輸出視窗中顯示為 \r\n。</summary>
+            private void OutputC(string text)
+            {
+                var sb = new StringBuilder(text.Length + 8);
+                for (int i = 0; i < text.Length; i++)
+                {
+                    if (text[i] == '\n' && (i == 0 || text[i - 1] != '\r')) sb.Append('\r');
+                    sb.Append(text[i]);
+                }
+                Output(sb.ToString());
+            }
+
+            private string ReadWideString(ulong address, int maxChars)
+            {
+                var sb = new StringBuilder();
+                for (int i = 0; i < maxChars; i++)
+                {
+                    char c = (char)ReadMem(address + (ulong)(i * 2), 16);
+                    if (c == '\0') break;
+                    sb.Append(c);
+                }
+                return sb.ToString();
+            }
+
+            /// <summary>簡化版的 printf 格式化：支援 %d %i %u %x %X %o %c %s %p %f %e %g %%，以及旗標、寬度、精確度與 l／ll／h／I64 長度修飾。</summary>
+            private string FormatC(string format, int firstArg)
+            {
+                var sb = new StringBuilder();
+                int argIndex = firstArg;
+                int n = Math.Min(format.Length, MaxFormatLength);
+                for (int i = 0; i < n && sb.Length < MaxFormatLength; i++)
+                {
+                    char c = format[i];
+                    if (c != '%') { sb.Append(c); continue; }
+                    int start = i;
+                    i++;
+                    if (i >= n) { sb.Append('%'); break; }
+                    if (format[i] == '%') { sb.Append('%'); continue; }
+                    bool left = false, zero = false, plus = false, space = false, alt = false;
+                    for (; i < n; i++)
+                    {
+                        char f = format[i];
+                        if (f == '-') left = true;
+                        else if (f == '0') zero = true;
+                        else if (f == '+') plus = true;
+                        else if (f == ' ') space = true;
+                        else if (f == '#') alt = true;
+                        else break;
+                    }
+                    int width = 0;
+                    if (i < n && format[i] == '*') { width = unchecked((int)(uint)Arg(argIndex++)); if (width < 0) { left = true; width = -width; } i++; }
+                    while (i < n && char.IsDigit(format[i]) && width < 1000) width = width * 10 + (format[i++] - '0');
+                    int precision = -1;
+                    if (i < n && format[i] == '.')
+                    {
+                        i++;
+                        precision = 0;
+                        if (i < n && format[i] == '*') { precision = unchecked((int)(uint)Arg(argIndex++)); i++; }
+                        while (i < n && char.IsDigit(format[i]) && precision < 1000) precision = precision * 10 + (format[i++] - '0');
+                    }
+                    width = Math.Min(width, 512);
+                    precision = Math.Min(precision, 512);
+                    bool wide64 = false;
+                    while (i < n)
+                    {
+                        char m = format[i];
+                        if (m == 'l' || m == 'h' || m == 'z' || m == 'j' || m == 't' || m == 'L' || m == 'w')
+                        {
+                            if (m == 'l' && i + 1 < n && format[i + 1] == 'l') { wide64 = true; i++; }
+                            else if ((m == 'z' || m == 'j' || m == 't') && _bits == 64) wide64 = true;
+                            else if (m == 'j') wide64 = true;
+                            i++;
+                        }
+                        else if (m == 'I' && i + 2 < n && format[i + 1] == '6' && format[i + 2] == '4') { wide64 = true; i += 3; }
+                        else if (m == 'I' && i + 2 < n && format[i + 1] == '3' && format[i + 2] == '2') { i += 3; }
+                        else break;
+                    }
+                    if (i >= n) { sb.Append(format, start, n - start); break; }
+                    char conv = format[i];
+                    string body;
+                    bool numeric = true;
+                    switch (conv)
+                    {
+                        case 'd':
+                        case 'i':
+                            {
+                                long v = wide64 ? (long)ReadArg64(ref argIndex) : unchecked((int)(uint)Arg(argIndex++));
+                                body = (v < 0 ? "-" : plus ? "+" : space ? " " : string.Empty) + Digits(v < 0 ? unchecked((ulong)(-v)) : (ulong)v, 10, false, precision);
+                                break;
+                            }
+                        case 'u':
+                        case 'x':
+                        case 'X':
+                        case 'o':
+                            {
+                                ulong v = wide64 ? ReadArg64(ref argIndex) : (uint)Arg(argIndex++);
+                                int radix = conv == 'u' ? 10 : conv == 'o' ? 8 : 16;
+                                body = (alt && v != 0 && radix == 16 ? (conv == 'X' ? "0X" : "0x") : alt && radix == 8 ? "0" : string.Empty) +
+                                       Digits(v, radix, conv == 'X', precision);
+                                break;
+                            }
+                        case 'p':
+                            {
+                                ulong v = _bits == 64 ? Arg(argIndex++) : (uint)Arg(argIndex++);
+                                body = v.ToString(_bits == 64 ? "X16" : "X8", CultureInfo.InvariantCulture);
+                                break;
+                            }
+                        case 'c':
+                            numeric = false;
+                            body = ((char)(Arg(argIndex++) & 0xFF)).ToString();
+                            break;
+                        case 's':
+                        case 'S':
+                            {
+                                numeric = false;
+                                ulong p = Arg(argIndex++) & AsmNumber.Mask(AddrBits);
+                                int max = precision >= 0 ? precision : MaxFormatLength;
+                                body = p == 0 ? "(null)" : conv == 'S' ? ReadWideString(p, max) : ReadCString(p, '\0', max);
+                                if (precision >= 0 && body.Length > precision) body = body.Substring(0, precision);
+                                break;
+                            }
+                        case 'f':
+                        case 'F':
+                        case 'e':
+                        case 'E':
+                        case 'g':
+                        case 'G':
+                            {
+                                // 可變參數中的 double：32 位元佔兩個堆疊槽位，x64 放在整數暫存器（和 XMM 暫存器）
+                                double d = BitConverter.Int64BitsToDouble(unchecked((long)ReadArg64(ref argIndex)));
+                                int prec = precision >= 0 ? precision : 6;
+                                string fmt = conv == 'f' || conv == 'F' ? "F" + prec : conv == 'e' || conv == 'E' ? (conv == 'E' ? "E" : "e") + prec : "G" + Math.Max(prec, 1);
+                                body = (d >= 0 && plus ? "+" : string.Empty) + d.ToString(fmt, CultureInfo.InvariantCulture);
+                                break;
+                            }
+                        default:
+                            sb.Append(format, start, i - start + 1);
+                            continue;
+                    }
+                    if (body.Length < width)
+                    {
+                        if (left) body = body.PadRight(width);
+                        else if (zero && numeric && precision < 0)
+                        {
+                            int sign = body.Length > 0 && (body[0] == '-' || body[0] == '+' || body[0] == ' ') ? 1 : 0;
+                            body = body.Substring(0, sign) + new string('0', width - body.Length) + body.Substring(sign);
+                        }
+                        else body = body.PadLeft(width);
+                    }
+                    sb.Append(body);
+                }
+                return sb.ToString();
+            }
+
+            private ulong ReadArg64(ref int argIndex)
+            {
+                if (_bits == 64) return Arg(argIndex++);
+                ulong low = Arg(argIndex++) & 0xFFFFFFFFUL;
+                ulong high = Arg(argIndex++) & 0xFFFFFFFFUL;
+                return low | (high << 32);
+            }
+
+            private static string Digits(ulong value, int radix, bool upper, int precision)
+            {
+                if (precision == 0 && value == 0) return string.Empty;
+                string s;
+                if (radix == 10) s = value.ToString(CultureInfo.InvariantCulture);
+                else if (radix == 16) s = value.ToString(upper ? "X" : "x", CultureInfo.InvariantCulture);
+                else
+                {
+                    var sb = new StringBuilder();
+                    do { sb.Insert(0, (char)('0' + (int)(value % 8))); value /= 8; } while (value != 0);
+                    s = sb.ToString();
+                }
+                if (precision >= 0 && s.Length < precision) s = new string('0', precision - s.Length) + s;
+                return s;
+            }
+
+            /// <summary>簡化版 scanf：%d %i %u %x 讀數字寫入 32 位元變數，%c 讀一個字元，%s 讀一個單字。</summary>
+            private int ScanC(string format, int firstArg)
+            {
+                int argIndex = firstArg, count = 0;
+                for (int i = 0; i < format.Length && i < MaxFormatLength; i++)
+                {
+                    if (format[i] != '%' || i + 1 >= format.Length) continue;
+                    i++;
+                    bool wide = false;
+                    while (i < format.Length && (char.IsDigit(format[i]) || format[i] == 'l' || format[i] == 'h'))
+                    {
+                        if (format[i] == 'l' && i + 1 < format.Length && format[i + 1] == 'l') wide = true;
+                        i++;
+                    }
+                    if (i >= format.Length) break;
+                    char conv = format[i];
+                    if (conv == '%') continue;
+                    ulong p = Arg(argIndex++) & AsmNumber.Mask(AddrBits);
+                    switch (conv)
+                    {
+                        case 'd':
+                        case 'i':
+                        case 'u':
+                        case 'x':
+                            {
+                                long v = NextInputNumber();
+                                if (p != 0) WriteMem(p, wide ? 64 : 32, unchecked((ulong)v) & AsmNumber.Mask(wide ? 64 : 32));
+                                count++;
+                                break;
+                            }
+                        case 'c':
+                            if (p != 0) WriteMem(p, 8, NextInputChar());
+                            count++;
+                            break;
+                        case 's':
+                            {
+                                string word = NextInputWord();
+                                for (int k = 0; k < word.Length && p != 0; k++) WriteMem(p + (ulong)k, 8, word[k] < 256 ? word[k] : '?');
+                                if (p != 0) WriteMem(p + (ulong)word.Length, 8, 0);
+                                count++;
+                                break;
+                            }
+                    }
+                }
+                return count;
+            }
+
+            private string NextInputWord()
+            {
+                string input = _options.Input ?? string.Empty;
+                while (_inputPos < input.Length && char.IsWhiteSpace(input[_inputPos])) _inputPos++;
+                int start = _inputPos;
+                while (_inputPos < input.Length && !char.IsWhiteSpace(input[_inputPos]) && _inputPos - start < 256) _inputPos++;
+                if (start == _inputPos) _result.Messages.Add("程式要求輸入字串，但「模擬輸入」已用完。");
+                return input.Substring(start, _inputPos - start);
+            }
+
+            private string ExitCodeText(ulong code)
+            {
+                return unchecked((int)(uint)code).ToString(CultureInfo.InvariantCulture);
+            }
+
+            /// <summary>執行有模擬的函式庫函式；name 必須是 LibraryCalls.Normalize 後的名稱。沒有模擬時傳回 false。</summary>
+            private bool CallLibrary(string name)
+            {
                 ulong eax = ReadReg(Registers["eax"]);
                 switch (name.ToLowerInvariant())
                 {
@@ -1956,17 +2460,160 @@ namespace Assam.Core.Simulation
                     case "getmseconds":
                         _derivation.Add(name + "：模擬器不處理畫面／時間，已略過");
                         return true;
+
+                    // ---------------- 結束程式 ----------------
                     case "exitprocess":
-                        Halt("ExitProcess：程式結束");
+                        Halt("ExitProcess：程式結束（結束碼 " + ExitCodeText(Arg(0)) + "）");
                         return true;
-                    case "printf":
-                    case "scanf":
+                    case "exit":
+                    case "_exit":
+                        Halt(name + "：程式結束（結束碼 " + ExitCodeText(Arg(0)) + "）");
+                        return true;
+                    case "abort":
+                        Halt("abort：程式異常終止");
+                        return true;
+                    case "__stack_chk_fail":
+                        Halt("__stack_chk_fail：偵測到堆疊保護值被改寫（緩衝區溢位），程式中止");
+                        return true;
+
+                    // ---------------- 編譯器輔助函式 ----------------
+                    case "__security_check_cookie":
+                        _derivation.Add("__security_check_cookie：模擬器沒有真正的安全 cookie，視為檢查通過");
+                        return true;
+                    case "__main":
+                        _derivation.Add("__main：MinGW 的全域初始化（模擬器略過）");
+                        return true;
+                    case "___chkstk_ms":
+                        _derivation.Add("___chkstk_ms：堆疊探測（只檢查 EAX = " + AsmNumber.Hex(eax, 32) + " 位元組，不改變 ESP；模擬器不需要探測）");
+                        return true;
+                    case "__chkstk":
+                    case "_chkstk":
+                    case "_alloca_probe":
+                    case "_alloca":
+                        if (_bits == 32)
+                        {
+                            var sp = StackReg;
+                            ulong old = ReadReg(sp);
+                            ulong size = eax & 0xFFFFFFFFUL;
+                            ulong nsp = (old - size) & 0xFFFFFFFFUL;
+                            WriteReg(sp, nsp);
+                            _derivation.Add(name + "：32 位元版本會配置堆疊空間，ESP = " + AsmNumber.Hex(old, 32) + " - " + AsmNumber.Hex(size, 32) + " = " + AsmNumber.Hex(nsp, 32));
+                        }
+                        else
+                        {
+                            _derivation.Add(name + "：堆疊探測（x64 版本不改變 RSP，呼叫者之後自己 sub rsp, rax）");
+                        }
+                        return true;
+
+                    // ---------------- C 函式庫 ----------------
                     case "puts":
+                        {
+                            ulong p = Arg(0) & AsmNumber.Mask(AddrBits);
+                            string s = ReadCString(p, '\0');
+                            OutputC(s + "\n");
+                            SetReturn(0);
+                            _derivation.Add("puts：輸出 " + AsmNumber.Hex(p, AddrBits) + " 的字串 " + Escape(s) + " 並換行");
+                            return true;
+                        }
                     case "putchar":
+                        {
+                            char c = (char)(Arg(0) & 0xFF);
+                            OutputC(c.ToString());
+                            SetReturn(c);
+                            _derivation.Add("putchar：輸出字元 '" + Printable(c) + "'");
+                            return true;
+                        }
+                    case "printf":
+                        {
+                            ulong p = Arg(0) & AsmNumber.Mask(AddrBits);
+                            string format = ReadCString(p, '\0');
+                            string s = FormatC(format, 1);
+                            OutputC(s);
+                            SetReturn((ulong)s.Length);
+                            _derivation.Add("printf：格式字串 " + Escape(format) + " → 輸出 " + Escape(s) +
+                                            (_bits == 64 ? "（參數依序取自 RDX、R8、R9、[RSP+20h]…）" : "（cdecl：參數依序取自堆疊 [ESP]、[ESP+4]…）"));
+                            return true;
+                        }
+                    case "sprintf":
+                    case "wsprintfa":
+                        {
+                            ulong dst = Arg(0) & AsmNumber.Mask(AddrBits);
+                            string format = ReadCString(Arg(1) & AsmNumber.Mask(AddrBits), '\0');
+                            string s = FormatC(format, 2);
+                            for (int i = 0; i < s.Length; i++) WriteMem(dst + (ulong)i, 8, s[i] < 256 ? s[i] : '?');
+                            WriteMem(dst + (ulong)s.Length, 8, 0);
+                            SetReturn((ulong)s.Length);
+                            _derivation.Add(name + "：把 " + Escape(s) + " 寫到 " + AsmNumber.Hex(dst, AddrBits));
+                            return true;
+                        }
                     case "getchar":
-                        _derivation.Add("C 函式 " + name + "：模擬器不支援，已略過");
-                        _result.Messages.Add("C 函式庫 " + name + " 沒有模擬，輸出可能不完整。");
-                        return true;
+                        {
+                            char c = NextInputChar();
+                            SetReturn(c);
+                            _derivation.Add("getchar：讀取字元 '" + Printable(c) + "' → " + (_bits == 64 ? "RAX" : "EAX"));
+                            return true;
+                        }
+                    case "scanf":
+                        {
+                            string format = ReadCString(Arg(0) & AsmNumber.Mask(AddrBits), '\0');
+                            int count = ScanC(format, 1);
+                            SetReturn((ulong)count);
+                            _derivation.Add("scanf：格式字串 " + Escape(format) + "，從模擬輸入讀取 " + count + " 個項目");
+                            return true;
+                        }
+                    case "strlen":
+                        {
+                            string s = ReadCString(Arg(0) & AsmNumber.Mask(AddrBits), '\0');
+                            SetReturn((ulong)s.Length);
+                            _derivation.Add("strlen：字串 " + Escape(s) + " 的長度 = " + s.Length);
+                            return true;
+                        }
+
+                    // ---------------- Win32 API ----------------
+                    case "getstdhandle":
+                        {
+                            long which = unchecked((int)(uint)Arg(0));
+                            ulong handle = which == -10 ? 3UL : which == -12 ? 11UL : 7UL;
+                            SetReturn(handle);
+                            _derivation.Add("GetStdHandle(" + which + ")：傳回模擬的主控台代碼 " + handle);
+                            return true;
+                        }
+                    case "writeconsolea":
+                    case "writeconsolew":
+                    case "writeconsole":
+                    case "writefile":
+                        {
+                            ulong buffer = Arg(1) & AsmNumber.Mask(AddrBits);
+                            ulong length = Math.Min(Arg(2) & 0xFFFFFFFFUL, 65536UL);
+                            ulong written = Arg(3) & AsmNumber.Mask(AddrBits);
+                            string s;
+                            if (name.Equals("WriteConsoleW", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var sb = new StringBuilder();
+                                for (ulong i = 0; i < length; i++) sb.Append((char)ReadMem(buffer + i * 2, 16));
+                                s = sb.ToString();
+                            }
+                            else s = ReadBytes(buffer, length);
+                            Output(s);
+                            if (written != 0) WriteMem(written, 32, length);
+                            SetReturn(1);
+                            _derivation.Add(name + "：輸出 " + AsmNumber.Hex(buffer, AddrBits) + " 開始的 " + length + " 個字元 " + Escape(s) + "，回傳 1（成功）");
+                            return true;
+                        }
+                    case "messageboxa":
+                    case "messageboxw":
+                    case "messagebox":
+                        {
+                            bool wide = name.Equals("MessageBoxW", StringComparison.OrdinalIgnoreCase);
+                            ulong textPtr = Arg(1) & AsmNumber.Mask(AddrBits);
+                            ulong captionPtr = Arg(2) & AsmNumber.Mask(AddrBits);
+                            string text = textPtr == 0 ? string.Empty : wide ? ReadWideString(textPtr, 1024) : ReadCString(textPtr, '\0', 1024);
+                            string caption = captionPtr == 0 ? "錯誤" : wide ? ReadWideString(captionPtr, 256) : ReadCString(captionPtr, '\0', 256);
+                            Output("［訊息方塊］" + caption + "：" + text + "\r\n");
+                            SetReturn(1);
+                            _derivation.Add(name + "：顯示訊息方塊，標題 " + Escape(caption) + "、內容 " + Escape(text) + "；模擬使用者按下「確定」，回傳 IDOK = 1");
+                            return true;
+                        }
                 }
                 return false;
             }

@@ -79,6 +79,43 @@ namespace Assam.Tests
         }
 
         [Test]
+        public static void BinaryKnowledgeIsLoadedAndSearchable()
+        {
+            var kb = new KnowledgeBase();
+            kb.LoadBuiltIn();
+            var bin = kb.Entries.Where(e => e.Id.StartsWith("bin-", StringComparison.Ordinal)).ToList();
+            Assert.True(bin.Count >= 20, "反組譯知識卡 " + bin.Count);
+            var categories = new[] { "概念", "做法", "推導", "範例", "除錯" };
+            foreach (var e in bin)
+            {
+                Assert.True(categories.Contains(e.Category), e.Id + " 分類 " + e.Category);
+                Assert.True(e.Arch == "x86" || e.Arch == "通用", e.Id + " 架構 " + e.Arch);
+                Assert.Contains("80_binary.md", e.Source);
+                Assert.True(e.Body.Length > 200, e.Id + " 內文太短");
+            }
+            Assert.True(bin.Any(e => e.Category == "推導") && bin.Any(e => e.Category == "除錯") && bin.Any(e => e.Category == "做法"));
+
+            var s = NewSearch(UserMemoryData.CreateNew());
+            Assert.Equal("bin-imports-iat", s.Search("什麼是 IAT 匯入表")[0].Entry.Id);
+            Assert.Equal("bin-rva-va-offset", s.Search("RVA 怎麼換算成檔案位置")[0].Entry.Id);
+            Assert.Equal("bin-magic-division", s.Search("除以常數為什麼變成乘法 魔術數字")[0].Entry.Id);
+            Assert.Equal("bin-pe-overview", s.Search("PE 檔案格式")[0].Entry.Id);
+            Assert.Equal("bin-dotnet-il", s.Search("IL 是什麼 .NET")[0].Entry.Id);
+            Assert.Equal("bin-entry-crt", s.Search("怎麼找 main")[0].Entry.Id);
+            Assert.Equal("bin-what-is-disasm", s.Search("什麼是反組譯")[0].Entry.Id);
+        }
+
+        [Test]
+        public static void AskAboutImportCall()
+        {
+            var a = NewAssistant();
+            var r = a.Ask("call dword ptr [__imp_ExitProcess] 是什麼意思");
+            Assert.NotNull(r.Explanation, "應把問句中的指令當成程式解釋");
+            Assert.Contains("IAT", r.Text);
+            Assert.Contains("ExitProcess", r.Text);
+        }
+
+        [Test]
         public static void SearchLearnsFromFeedback()
         {
             var memory = UserMemoryData.CreateNew();

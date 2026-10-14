@@ -101,6 +101,7 @@
     <EmbeddedResource Include="Knowledge\Data\50_arm.md" />
     <EmbeddedResource Include="Knowledge\Data\60_mips_riscv_avr.md" />
     <EmbeddedResource Include="Knowledge\Data\70_debug.md" />
+    <EmbeddedResource Include="Knowledge\Data\80_binary.md" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
