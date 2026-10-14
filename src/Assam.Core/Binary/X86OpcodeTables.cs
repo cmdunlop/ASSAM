@@ -429,6 +429,8 @@ namespace Assam.Core.Binary
             t[0x21] = Mk("mov", R(Ty.D), Dr);
             t[0x22] = Mk("mov", Cr, R(Ty.D));
             t[0x23] = Mk("mov", Dr, R(Ty.D));
+            t[0x78] = Fl(Mk("vmread", E(Ty.V), G(Ty.V)), F_O64);
+            t[0x79] = Fl(Mk("vmwrite", G(Ty.V), E(Ty.V)), F_O64);
             t[0x30] = Mk("wrmsr"); t[0x31] = Mk("rdtsc"); t[0x32] = Mk("rdmsr"); t[0x33] = Mk("rdpmc");
             t[0x34] = Mk("sysenter"); t[0x35] = Mk("sysexit");
             t[0x37] = Mk("getsec");

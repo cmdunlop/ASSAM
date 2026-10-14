@@ -9,7 +9,7 @@ namespace Assam.Core.Binary
     /// x86／x64 機器碼解碼器（16、32、64 位元模式），輸出 Intel 語法（格式與 objdump -M intel 一致，小寫）。
     /// 純軟體表格解碼，不需要網路或任何外部函式庫。絕不丟出例外、絕不讀出緩衝區範圍。
     /// </summary>
-    public sealed class X86Decoder
+    public sealed partial class X86Decoder
     {
         public X86Decoder(int bits)
         {
@@ -50,6 +50,9 @@ namespace Assam.Core.Binary
         bool _mHasDisp, _mRip, _mAbs, _mSibEiz;
         int _addrBits;
 
+        // REX2（APX）：r16..r31 的擴充位元（16 或 0）
+        int _r4, _x4, _b4;
+
         // VEX
         bool _vex;
         int _vvvv, _vexL, _vexPP, _vexMap;
@@ -66,6 +69,7 @@ namespace Assam.Core.Binary
             _over = false; _p66 = _p67 = _lock = _repne = _rep = false; _seg = -1; _rex = 0; _hasRex = false; _mandatory = 0;
             _hasModRM = false; _rmIsMem = false; _vex = false; _vexW = false; _vvvv = 0; _vexL = 0; _vexPP = 0; _vexMap = 0;
             _relOperand = null; _vexImmRead = false; _opRegIdx = 0; _fwaitMerge = false; _segConsumed = false; _orphanRex = -1;
+            ResetAvx();
             try
             {
                 DecodeCore(ins);
@@ -126,8 +130,11 @@ namespace Assam.Core.Binary
                 int payload = U8();
                 _hasRex = true;
                 _rex = 0x40 | (payload & 0x0F); // W R X B（低 4 位元）
+                _r4 = (payload & 0x40) != 0 ? 16 : 0; _x4 = (payload & 0x20) != 0 ? 16 : 0; _b4 = (payload & 0x10) != 0 ? 16 : 0; // R4/X4/B4：r16..r31
                 bool m0 = (payload & 0x80) != 0;
+                _rex2 = true;
                 op = U8();
+                if (!m0 && op == 0xA1) { EmitJmpAbs(ins); return; } // APX jmpabs imm64
                 if (m0) { twoByte = true; map = 1; e = PickMap(X86OpcodeTables.TwoByte, X86OpcodeTables.TwoByte66, X86OpcodeTables.TwoByteF3, X86OpcodeTables.TwoByteF2, op); }
                 else e = X86OpcodeTables.OneByte[op];
             }
@@ -145,7 +152,7 @@ namespace Assam.Core.Binary
                 DecodeVex(ins, op);
                 return;
             }
-            else if (op == 0x62 && Bits == 64)
+            else if (op == 0x62 && (Bits == 64 || (Peek() & 0xC0) == 0xC0))
             {
                 DecodeEvex(ins);
                 return;
@@ -318,7 +325,7 @@ namespace Assam.Core.Binary
                 {
                     _mBase = Addr16Base[_rmField];
                     _mIndex = Addr16Index[_rmField];
-                    if (_mod == 1) { _mDisp = (sbyte)U8(); _mHasDisp = true; }
+                    if (_mod == 1) { _mDisp = (sbyte)U8() * _disp8N; _mHasDisp = true; }
                     else if (_mod == 2) { _mDisp = (short)U16(); _mHasDisp = true; }
                 }
                 return;
@@ -330,8 +337,8 @@ namespace Assam.Core.Binary
                 int scale = 1 << (sib >> 6);
                 int indexF = (sib >> 3) & 7;
                 int baseF = sib & 7;
-                int indexReg = indexF + (RexX ? 8 : 0);
-                bool noIndex = (indexF == 4 && !RexX);
+                int indexReg = indexF + (RexX ? 8 : 0) + _x4;
+                bool noIndex = (indexF == 4 && !RexX && _x4 == 0 && _vsibBytes == 0);
                 _mScale = scale;
                 if (baseF == 5 && _mod == 0)
                 {
@@ -344,20 +351,20 @@ namespace Assam.Core.Binary
                     }
                     else
                     {
-                        _mIndex = AddrReg(indexReg);
+                        _mIndex = IndexName(indexReg);
                         _mAbs = false; _mBase = null;
                     }
                 }
                 else
                 {
-                    _mBase = AddrReg(baseF + (RexB ? 8 : 0));
-                    if (!noIndex) _mIndex = AddrReg(indexReg);
+                    _mBase = AddrReg(baseF + (RexB ? 8 : 0) + _b4);
+                    if (!noIndex) _mIndex = IndexName(indexReg);
                     else
                     {
                         // eiz 規則
                         if (!(baseF == 4 && (sib >> 6) == 0)) _mSibEiz = true;
                     }
-                    if (_mod == 1) { _mDisp = (sbyte)U8(); _mHasDisp = true; }
+                    if (_mod == 1) { _mDisp = (sbyte)U8() * _disp8N; _mHasDisp = true; }
                     else if (_mod == 2) { _mDisp = (int)U32(); _mHasDisp = true; }
                 }
             }
@@ -371,8 +378,8 @@ namespace Assam.Core.Binary
                 }
                 else
                 {
-                    _mBase = AddrReg(_rmField + (RexB ? 8 : 0));
-                    if (_mod == 1) { _mDisp = (sbyte)U8(); _mHasDisp = true; }
+                    _mBase = AddrReg(_rmField + (RexB ? 8 : 0) + _b4);
+                    if (_mod == 1) { _mDisp = (sbyte)U8() * _disp8N; _mHasDisp = true; }
                     else if (_mod == 2) { _mDisp = (int)U32(); _mHasDisp = true; }
                 }
             }
@@ -380,9 +387,17 @@ namespace Assam.Core.Binary
 
         string AddrReg(int idx)
         {
+            if (idx >= 16) return HiGpr(idx, _addrBits);
             if (_addrBits == 64) return Reg64[idx & 15];
             if (_addrBits == 32) return Reg32[idx & 15];
             return Reg16[idx & 15];
+        }
+
+        // REX2 的 r16..r31
+        static string HiGpr(int idx, int bits)
+        {
+            string n = "r" + (idx & 31).ToString(CultureInfo.InvariantCulture);
+            switch (bits) { case 8: return n + "b"; case 16: return n + "w"; case 32: return n + "d"; default: return n; }
         }
 
         // ---------------- 群組解析 ----------------
@@ -508,13 +523,14 @@ namespace Assam.Core.Binary
         void EmitEntry(DecodedInstruction ins, OpEntry e, int op, int map)
         {
             int opsize = ResolveOpsize(e);
-            _opRegIdx = (op & 7) + (RexB ? 8 : 0);
+            _opRegIdx = (op & 7) + (RexB ? 8 : 0) + _b4;
             // 讀取記憶體尾段（SIB/位移）
             if (_hasModRM) ReadMemTail(RmForcedReg(e));
 
             string mn = e.Mn;
             if ((e.Flags & X86OpcodeTables.F_DQNAME) != 0 && RexW && mn != null && mn.EndsWith("d", StringComparison.Ordinal))
                 mn = mn.Substring(0, mn.Length - 1) + "q";
+            if (map == 0 && _rex2 && RexW && op >= 0x50 && op <= 0x5F) mn = op < 0x58 ? "pushp" : "popp"; // REX2.W：pushp/popp
             if (map == 0 && mn == "mov")
             {
                 if (op >= 0xB8 && op <= 0xBF && opsize == 64) mn = "movabs";
@@ -536,6 +552,8 @@ namespace Assam.Core.Binary
             }
             // mov r/m,Sreg（8C）：記憶體運算元固定為 word
             if (map == 0 && op == 0x8C && _rmIsMem) e.A = new Opr(Am.E, Ty.W);
+            // mov Sreg,r/m（8E）：暫存器形式依運算元大小（objdump：mov es, eax）；記憶體形式為 word
+            if (map == 0 && op == 0x8E) e.B = _rmIsMem ? new Opr(Am.E, Ty.W) : new Opr(Am.E, Ty.V);
             // arpl（63，非 64 位元）：reg 為運算元大小；r/m 暫存器時為運算元大小、記憶體時為 word
             if (map == 0 && op == 0x63 && Bits != 64)
             {
@@ -638,7 +656,7 @@ namespace Assam.Core.Binary
                     BuildRmReg(d, o, opsize);
                     break;
                 case Am.G:
-                    SetReg(d, GprName(_regField + (RexR ? 8 : 0), TySize(o.T, opsize)), TySize(o.T, opsize));
+                    SetReg(d, GprName(_regField + (RexR ? 8 : 0) + _r4, TySize(o.T, opsize)), TySize(o.T, opsize));
                     break;
                 case Am.V:
                     SetXmm(d, _regField + (RexR ? 8 : 0), o.T);
@@ -647,7 +665,7 @@ namespace Assam.Core.Binary
                     SetReg(d, "mm" + (_regField & 7).ToString(CultureInfo.InvariantCulture), 64);
                     break;
                 case Am.Seg:
-                    { int s = _regField & 7; if (s > 5) { ok = false; return; } SetReg(d, SegNames[s], 16); }
+                    { int s = _regField & 7; SetReg(d, s > 5 ? "?" : SegNames[s], 16); } // 保留的區段暫存器 6/7：objdump 顯示 "?"
                     break;
                 case Am.Cr:
                     SetReg(d, "cr" + (_regField + (RexR ? 8 : 0)).ToString(CultureInfo.InvariantCulture), Bits == 64 ? 64 : 32);
@@ -717,7 +735,7 @@ namespace Assam.Core.Binary
 
         void BuildRmReg(DecodedOperand d, Opr o, int opsize)
         {
-            int idx = _rmField + (RexB ? 8 : 0);
+            int idx = _rmField + (RexB ? 8 : 0) + _b4;
             switch (o.M)
             {
                 case Am.W: case Am.U: SetXmm(d, idx, o.T); return;
@@ -731,8 +749,12 @@ namespace Assam.Core.Binary
 
         void BuildMem(DecodedOperand d, Opr o, int opsize)
         {
+            BuildMemCore(d, TySize(o.T, opsize), SizeKeyword(o.T, opsize));
+        }
+
+        void BuildMemCore(DecodedOperand d, int bits, string kw)
+        {
             d.Kind = OperandKind.Memory;
-            int bits = TySize(o.T, opsize);
             d.SizeBits = bits;
             d.Scale = _mScale;
             d.BaseRegister = _mBase;
@@ -744,7 +766,6 @@ namespace Assam.Core.Binary
             if (segOp >= 0) { d.Segment = SegNames[segOp]; _segConsumed = true; }
 
             var sb = new StringBuilder();
-            string kw = SizeKeyword(o.T, opsize);
             if (kw != null) { sb.Append(kw); sb.Append(" ptr "); }
             if (segOp >= 0) { sb.Append(SegNames[segOp]); sb.Append(':'); }
 
@@ -937,6 +958,7 @@ namespace Assam.Core.Binary
 
         string GprName(int idx, int bits)
         {
+            if (idx >= 16) return HiGpr(idx, bits);
             idx &= 15;
             switch (bits)
             {
@@ -1026,7 +1048,7 @@ namespace Assam.Core.Binary
         // ---------------- xchg / nop ----------------
         void DecodeXchgNop(DecodedInstruction ins, int op)
         {
-            int reg = (op & 7) + (RexB ? 8 : 0);
+            int reg = (op & 7) + (RexB ? 8 : 0) + _b4;
             int opsize = Bits == 64 ? (RexW ? 64 : (_p66 ? 16 : 32)) : (_p66 ? (Bits == 16 ? 32 : 16) : (Bits == 16 ? 16 : 32));
             if (op == 0x90 && reg == 0)
             {
@@ -1124,27 +1146,7 @@ namespace Assam.Core.Binary
             VexEmit(ins, op);
         }
 
-        void DecodeEvex(DecodedInstruction ins)
-        {
-            int p0 = U8(); int p1 = U8(); int p2 = U8();
-            _vex = true;
-            _vexMap = p0 & 0x07;
-            _vexW = (p1 & 0x80) != 0;
-            _vexPP = p1 & 3;
-            int ll = (p2 >> 5) & 3;
-            _vexL = ll == 0 ? 0 : 1;
-            int r = (p0 & 0x80) == 0 ? 4 : 0;
-            int x = (p0 & 0x40) == 0 ? 2 : 0;
-            int bb = (p0 & 0x20) == 0 ? 1 : 0;
-            _rex = r | x | bb | (_vexW ? 8 : 0); _hasRex = true;
-            _vvvv = (~(p1 >> 3)) & 0xF;
-            _mandatory = _vexPP == 1 ? 0x66 : _vexPP == 2 ? 0xF3 : _vexPP == 3 ? 0xF2 : 0;
-            _p66 = _vexPP == 1; _rep = _vexPP == 2; _repne = _vexPP == 3;
-            int op = U8();
-            VexEmit(ins, op, true);
-        }
-
-        void VexEmit(DecodedInstruction ins, int op, bool evex = false)
+        void VexEmit(DecodedInstruction ins, int op)
         {
             OpEntry baseE;
             bool imm8 = false;
@@ -1167,11 +1169,14 @@ namespace Assam.Core.Binary
             }
             // 讀 ModRM + 尾段（VEX 一律有 ModRM）
             ReadModRM(AddrBitsFor());
+            if (_over) { ins.IsValid = false; return; }
+            if (AvxTableDecode(ins, op)) return; // 表格驅動（AVX2 補強；命中則完成）
             ReadMemTail(RmForcedReg(baseE));
 
             string mn = baseE.Mn;
             if (mn == null || mn.StartsWith("*", StringComparison.Ordinal) || mn.StartsWith("(", StringComparison.Ordinal))
                 mn = null;
+            if (mn != null && !IsVexShape(baseE)) mn = null; // 非向量類的舊式指令（jcc、setcc、push…）沒有 VEX 形式
 
             // 長度：ModRM/SIB/位移已讀，imm8 補讀
             // 建立運算元文字（盡量比對 objdump；未知者仍保證長度）
@@ -1197,6 +1202,19 @@ namespace Assam.Core.Binary
         }
 
         bool _vexImmRead;
+
+        // 舊式表中可能有 VEX 形式的指令：含 XMM/YMM 運算元，且不含 MMX 運算元
+        static bool IsVexShape(OpEntry e)
+        {
+            bool vec = false;
+            Opr[] os = { e.A, e.B, e.C, e.D };
+            foreach (Opr o in os)
+            {
+                if (o.M == Am.P || o.M == Am.N || o.M == Am.Q) return false;
+                if (o.M == Am.V || o.M == Am.W || o.M == Am.U || o.M == Am.H) vec = true;
+            }
+            return vec;
+        }
 
         bool HasImmOperand(OpEntry e)
         {

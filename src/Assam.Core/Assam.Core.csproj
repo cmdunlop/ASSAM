@@ -58,7 +58,9 @@
     <Compile Include="Binary\DecodedInstruction.cs" />
     <Compile Include="Binary\Disassembler.cs" />
     <Compile Include="Binary\DisassemblyModels.cs" />
+    <Compile Include="Binary\X86AvxTables.cs" />
     <Compile Include="Binary\X86Decoder.cs" />
+    <Compile Include="Binary\X86DecoderAvx.cs" />
     <Compile Include="Binary\X86OpcodeTables.cs" />
     <Compile Include="Derivation\NumberDerivation.cs" />
     <Compile Include="Instructions\InstructionInfo.cs" />
