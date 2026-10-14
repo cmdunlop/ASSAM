@@ -10,7 +10,7 @@ using Assam.Core.Assistant;
 namespace Assam.App
 {
     /// <summary>
-    /// 主視窗：六個分頁（智慧問答、程式碼分析、推導模擬、數值推導、知識庫、學習記憶）。
+    /// 主視窗：七個分頁（智慧問答、程式碼分析、推導模擬、反組譯、數值推導、知識庫、學習記憶）。
     /// 介面全部以程式碼建立（DesignerCategory = Code），在 VS2019 中直接開啟程式碼即可修改。
     /// </summary>
     [DesignerCategory("Code")]
@@ -22,6 +22,7 @@ namespace Assam.App
         private readonly ChatPage _chat;
         private readonly CodePage _code;
         private readonly SimulationPage _simulation;
+        private readonly DisassemblyPage _disassembly;
         private readonly NumberPage _numbers;
         private readonly KnowledgePage _knowledge;
         private readonly MemoryPage _memory;
@@ -49,6 +50,7 @@ namespace Assam.App
             _chat = new ChatPage(_assistant, SetStatus);
             _code = new CodePage(_assistant, SetStatus);
             _simulation = new SimulationPage(_assistant, SetStatus);
+            _disassembly = new DisassemblyPage(_assistant, SetStatus);
             _numbers = new NumberPage(SetStatus);
             _knowledge = new KnowledgePage(_assistant, SetStatus);
             _memory = new MemoryPage(_assistant, SetStatus);
@@ -56,11 +58,22 @@ namespace Assam.App
             AddTab("智慧問答", _chat);
             AddTab("程式碼分析", _code);
             AddTab("推導模擬（x86）", _simulation);
+            AddTab("反組譯（EXE／DLL）", _disassembly);
             AddTab("數值推導", _numbers);
             AddTab("知識庫", _knowledge);
             AddTab("學習記憶", _memory);
 
             _code.SendToSimulation += code =>
+            {
+                _simulation.LoadCode(code);
+                _tabs.SelectedTab = (TabPage)_simulation.Parent;
+            };
+            _disassembly.SendToAnalysis += code =>
+            {
+                _code.LoadCode(code, "反組譯結果");
+                _tabs.SelectedTab = (TabPage)_code.Parent;
+            };
+            _disassembly.SendToSimulation += code =>
             {
                 _simulation.LoadCode(code);
                 _tabs.SelectedTab = (TabPage)_simulation.Parent;
@@ -96,6 +109,11 @@ namespace Assam.App
             var menu = new MenuStrip { Font = Ui.UiFont };
             var file = new ToolStripMenuItem("檔案(&F)");
             file.DropDownItems.Add("開啟組合語言檔案…", null, (s, e) => OpenCodeFile());
+            file.DropDownItems.Add("開啟 EXE／DLL 反組譯…", null, (s, e) =>
+            {
+                _tabs.SelectedTab = (TabPage)_disassembly.Parent;
+                _disassembly.OpenFile();
+            });
             file.DropDownItems.Add("開啟學習記憶資料夾", null, (s, e) => OpenFolder(_assistant.Memory.DataDirectory));
             file.DropDownItems.Add(new ToolStripSeparator());
             file.DropDownItems.Add("結束(&X)", null, (s, e) => Close());
@@ -110,7 +128,8 @@ namespace Assam.App
                 "ASSAM 離線組合語言 AI 助理 v" + AsmAssistant.Version + "\r\n\r\n" +
                 "・完全離線：不需要網路，也不會傳送任何資料\r\n" +
                 "・本機學習：回饋與教學存在\r\n  " + _assistant.Memory.MemoryFilePath + "\r\n" +
-                "・技術：BM25 檢索、單純貝氏分類、線上學習、規則式專家系統、x86 指令模擬\r\n" +
+                "・技術：BM25 檢索、單純貝氏分類、線上學習、規則式專家系統、x86 指令模擬、x86／x64 反組譯與 .NET IL 解析\r\n" +
+                "・反組譯只讀取檔案做靜態分析，不會執行載入的 EXE／DLL\r\n" +
                 "・需求：Windows 7 SP1 以上、.NET Framework 4.7.2、記憶體 1GB 以上即可"));
 
             menu.Items.Add(file);

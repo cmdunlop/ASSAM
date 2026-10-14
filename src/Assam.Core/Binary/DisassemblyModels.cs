@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -133,6 +133,7 @@ namespace Assam.Core.Binary
             Functions = new List<DisassembledFunction>();
             Symbols = new Dictionary<ulong, string>();
             Messages = new List<string>();
+            ImportThunks = new Dictionary<ulong, PeImport>();
         }
 
         public LoadedBinary Binary { get; set; }
@@ -144,6 +145,10 @@ namespace Assam.Core.Binary
         public Dictionary<ulong, string> Symbols { get; private set; }
 
         public List<string> Messages { get; private set; }
+
+        /// <summary>匯入跳板（只有一條 jmp [IAT] 的函式）起始位址 → 它轉到的匯入函式。</summary>
+        internal Dictionary<ulong, PeImport> ImportThunks { get; private set; }
+
         public int TotalInstructions { get; set; }
 
         /// <summary>是否因為達到上限而沒有全部反組譯。</summary>
