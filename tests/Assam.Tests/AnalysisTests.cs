@@ -217,5 +217,156 @@ namespace Assam.Tests
             var e = NewExplainer().Explain(Sample("ARM（32"));
             Assert.Contains("後索引", e.ToText());
         }
+
+        // ---------------- 函式庫名稱與反組譯符號 ----------------
+
+        [Test]
+        public static void LibraryCallsNormalizeDisassemblerForms()
+        {
+            Assert.Equal("ExitProcess", LibraryCalls.Normalize("dword ptr [__imp_ExitProcess]"));
+            Assert.Equal("GetStdHandle", LibraryCalls.Normalize("qword ptr [__imp_GetStdHandle]"));
+            Assert.Equal("GetStdHandle", LibraryCalls.Normalize("qword ptr [rip+__imp_GetStdHandle]"));
+            Assert.Equal("printf", LibraryCalls.Normalize("[__imp_printf]"));
+            Assert.Equal("printf", LibraryCalls.Normalize("__imp__printf"));
+            Assert.Equal("printf", LibraryCalls.Normalize("_printf"));
+            Assert.Equal("printf", LibraryCalls.Normalize("j_printf"));
+            Assert.Equal("ExitProcess", LibraryCalls.Normalize("KERNEL32.dll!ExitProcess"));
+            Assert.Equal("ExitProcess", LibraryCalls.Normalize("_ExitProcess@4"));
+            Assert.Equal("MessageBoxA", LibraryCalls.Normalize("__imp__MessageBoxA@16"));
+            Assert.Equal("MessageBoxW", LibraryCalls.Normalize("ds:[__imp_MessageBoxW]"));
+            Assert.Equal("_exit", LibraryCalls.Normalize("_exit"), "_exit 與 exit 是不同的函式");
+            Assert.Equal("exit", LibraryCalls.Normalize("__imp_exit"));
+            Assert.Equal("___chkstk_ms", LibraryCalls.Normalize("___chkstk_ms"));
+            Assert.Equal("__getmainargs", LibraryCalls.Normalize("dword ptr [__imp___getmainargs]"));
+            Assert.Equal("WS2_32.dll_115", LibraryCalls.Normalize("dword ptr [__imp_WS2_32.dll_115]"));
+            Assert.Equal("MyFunc", LibraryCalls.Normalize("MyFunc@12"));
+            Assert.Null(LibraryCalls.Normalize(null));
+            Assert.Null(LibraryCalls.Normalize("   "));
+        }
+
+        [Test]
+        public static void LibraryCallsDescribeApis()
+        {
+            Assert.Contains("Irvine32", LibraryCalls.Describe("WriteString"));
+            Assert.Contains("結束", LibraryCalls.Describe("dword ptr [__imp_ExitProcess]"));
+            Assert.Contains("結束", LibraryCalls.Describe("KERNEL32.dll!ExitProcess"));
+            string a = LibraryCalls.Describe("MessageBoxA");
+            string w = LibraryCalls.Describe("MessageBoxW");
+            Assert.Contains("訊息方塊", a);
+            Assert.Contains("訊息方塊", w);
+            Assert.Contains("Unicode", w);
+            Assert.DoesNotContain("Unicode", a);
+            Assert.Contains("Unicode", LibraryCalls.Describe("__imp_CreateFileW"));
+            foreach (var name in new[]
+            {
+                "GetStdHandle", "WriteConsoleA", "WriteConsoleW", "WriteFile", "ReadFile", "ReadConsoleA", "CreateFileA", "CloseHandle", "GetModuleHandleA",
+                "GetModuleHandleW", "GetProcAddress", "LoadLibraryA", "LoadLibraryW", "FreeLibrary", "VirtualAlloc", "VirtualFree", "VirtualProtect", "VirtualQuery",
+                "HeapAlloc", "HeapFree", "GetProcessHeap", "GetLastError", "SetLastError", "Sleep", "GetTickCount", "QueryPerformanceCounter", "GetCommandLineA",
+                "GetCommandLineW", "GetSystemTimeAsFileTime", "GetCurrentProcessId", "GetCurrentThreadId", "CreateThread", "ExitThread", "InitializeCriticalSection",
+                "EnterCriticalSection", "LeaveCriticalSection", "DeleteCriticalSection", "TlsGetValue", "SetUnhandledExceptionFilter", "IsDebuggerPresent",
+                "MultiByteToWideChar", "WideCharToMultiByte", "wsprintfA", "printf", "puts", "putchar", "scanf", "sprintf", "fprintf", "vfprintf", "fputc",
+                "fwrite", "fputs", "malloc", "calloc", "realloc", "free", "memcpy", "memset", "memmove", "memcmp", "strlen", "strcpy", "strncpy", "strcmp",
+                "strncmp", "strcat", "strchr", "atoi", "abort", "exit", "_exit", "signal", "__getmainargs", "__set_app_type", "_initterm", "_cexit", "_amsg_exit",
+                "__p__fmode", "__p__commode", "_onexit", "__acrt_iob_func", "__stdio_common_vfprintf", "_errno", "setlocale", "localeconv",
+                "__security_check_cookie", "__stack_chk_fail", "__chkstk", "___chkstk_ms", "__main", "_alloca"
+            })
+                Assert.NotNull(LibraryCalls.Describe(name), "缺少說明：" + name);
+            Assert.Null(LibraryCalls.Describe("sub_401560"));
+            Assert.Null(LibraryCalls.Describe("NoSuchFunction"));
+            Assert.Contains("序號 115", LibraryCalls.DescribeOrdinalImport("__imp_WS2_32.dll_115"));
+        }
+
+        [Test]
+        public static void LibraryCallsStdcallBytes()
+        {
+            Assert.Equal(16, LibraryCalls.StdcallArgumentBytes("dword ptr [__imp_MessageBoxA]"));
+            Assert.Equal(4, LibraryCalls.StdcallArgumentBytes("ExitProcess"));
+            Assert.Equal(12, LibraryCalls.StdcallArgumentBytes("MyFunc@12"));
+            Assert.Equal(0, LibraryCalls.StdcallArgumentBytes("GetTickCount"));
+            Assert.Equal(-1, LibraryCalls.StdcallArgumentBytes("printf"));
+            Assert.Equal(-1, LibraryCalls.StdcallArgumentBytes("wsprintfA"));
+            Assert.Equal(-1, LibraryCalls.StdcallArgumentBytes("sub_401000"));
+        }
+
+        [Test]
+        public static void LibraryCallsNeverThrowOnMalformedInput()
+        {
+            var inputs = new[] { null, string.Empty, " ", "[", "]", "[]", "dword ptr [", "dword ptr", "__imp_", "__imp__", "@", "@@", "@8", "!", "a!", "!b",
+                                 "_", "__", "j_", "ds:", "[rip+]", new string('_', 2000), new string('[', 600) + "__imp_X", "\0中文", "A", "W" };
+            foreach (var s in inputs)
+            {
+                LibraryCalls.Normalize(s);
+                LibraryCalls.Describe(s);
+                LibraryCalls.StdcallArgumentBytes(s);
+                LibraryCalls.DescribeOrdinalImport(s);
+                LibraryCalls.IsDisassemblerSymbol(s);
+                LibraryCalls.IsImportReference(s);
+            }
+            Assert.True(LibraryCalls.IsDisassemblerSymbol("sub_401560"));
+            Assert.True(LibraryCalls.IsDisassemblerSymbol("loc_401578"));
+            Assert.True(LibraryCalls.IsDisassemblerSymbol("loc_140001000_2"));
+            Assert.True(LibraryCalls.IsDisassemblerSymbol("j_printf"));
+            Assert.True(LibraryCalls.IsDisassemblerSymbol("__imp_ExitProcess"));
+            Assert.False(LibraryCalls.IsDisassemblerSymbol("L1"));
+            Assert.False(LibraryCalls.IsDisassemblerSymbol("sub_total"));
+        }
+
+        [Test]
+        public static void ExplainImportCallThroughIat()
+        {
+            string code = ".data\nstr_404000 db \"Hi\", 0\n.code\nmain:\n    push offset str_404000\n    call dword ptr [__imp_puts]   ; msvcrt.dll!puts\n" +
+                          "    add esp, 4\n    push 0\n    call dword ptr [__imp_ExitProcess]\n";
+            var e = NewExplainer().Explain(code);
+            Assert.Equal(AsmArch.X86Intel, e.Arch);
+            var line = e.Lines.First(l => l.Code.Contains("__imp_ExitProcess"));
+            Assert.Contains("IAT", line.Explanation);
+            Assert.Contains("間接呼叫", line.Explanation);
+            Assert.Contains("ExitProcess：Win32 API", line.Explanation);
+            string notes = string.Join("\n", e.Notes);
+            Assert.Contains("呼叫的副程式：puts（", notes);
+            Assert.Contains("ExitProcess（透過匯入表", notes);
+            Assert.Equal(0, e.Warnings.Count, string.Join(" | ", e.Warnings));
+        }
+
+        [Test]
+        public static void ExplainImportThunkAndRegisterCall()
+        {
+            string code = "main:\n    mov esi, dword ptr [__imp_printf]\n    call esi\n    jmp dword ptr [__imp_exit]\n";
+            var e = NewExplainer().Explain(code, AsmArch.X86Intel);
+            var call = e.Lines.First(l => l.Code.Contains("call esi"));
+            Assert.Contains("printf", call.Explanation);
+            var jmp = e.Lines.First(l => l.Code.Contains("jmp"));
+            Assert.Contains("匯入跳板", jmp.Explanation);
+            Assert.Contains("exit（透過匯入表", string.Join("\n", e.Notes));
+            Assert.Equal(0, e.Warnings.Count, string.Join(" | ", e.Warnings));
+        }
+
+        [Test]
+        public static void ExplainDisassemblerSymbolsWithoutWarnings()
+        {
+            string code = ".code\nsub_401500:\n    test eax, eax\n    jz loc_401578\n    call sub_401560\n    jmp loc_401590\n    call j_puts\n    ret\n";
+            var e = NewExplainer().Explain(code, AsmArch.X86Intel);
+            string warnings = string.Join(" | ", e.Warnings);
+            Assert.DoesNotContain("找不到定義", warnings);
+            Assert.Equal(0, e.Warnings.Count, warnings);
+            string notes = string.Join("\n", e.Notes);
+            Assert.Contains("反組譯器產生的名稱", notes);
+            Assert.Contains("loc_401578", notes);
+            var call = e.Lines.First(l => l.Code.Contains("call sub_401560"));
+            Assert.Contains("0x401560", call.Explanation);
+            var thunk = e.Lines.First(l => l.Code.Contains("call j_puts"));
+            Assert.Contains("匯入跳板", thunk.Explanation);
+
+            // 一般的未定義標籤仍然要警告
+            var bad = NewExplainer().Explain("jmp nowhere", AsmArch.X86Intel);
+            Assert.Contains("找不到定義", string.Join(" | ", bad.Warnings));
+        }
+
+        [Test]
+        public static void ExplainRetOperandIsNotACallTarget()
+        {
+            var e = NewExplainer().Explain("AddTwo PROC\n    mov eax, [esp+4]\n    add eax, [esp+8]\n    ret 8\nAddTwo ENDP", AsmArch.X86Intel);
+            Assert.DoesNotContain("呼叫的副程式", string.Join("\n", e.Notes));
+        }
     }
 }
