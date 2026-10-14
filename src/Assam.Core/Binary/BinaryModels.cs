@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 
 namespace Assam.Core.Binary
@@ -25,8 +25,13 @@ namespace Assam.Core.Binary
         /// <summary>區段起始的虛擬位址（VA = ImageBase + RVA）。</summary>
         public ulong VirtualAddress { get; set; }
         public uint Rva { get; set; }
+        /// <summary>記憶體中的大小。PE 檔頭的 VirtualSize 為 0 時，載入器改填 SizeOfRawData（與 Windows 相同）。</summary>
         public uint VirtualSize { get; set; }
         public uint RawOffset { get; set; }
+        /// <summary>
+        /// 檔案中實際可讀的位元組數。載入器已截掉超出檔案結尾的部分與超過 VirtualSize 的對齊填充；
+        /// PointerToRawData 為 0 或超出檔案時為 0。RawSize 到 MemorySize 之間（例如 .bss）執行時是 0、沒有檔案內容。
+        /// </summary>
         public uint RawSize { get; set; }
         public uint Characteristics { get; set; }
 

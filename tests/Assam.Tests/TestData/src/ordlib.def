@@ -1,0 +1,3 @@
+LIBRARY ordlib.dll
+EXPORTS
+    OrdFunc @7 NONAME
