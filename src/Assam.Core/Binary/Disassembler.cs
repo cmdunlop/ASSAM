@@ -76,7 +76,8 @@ namespace Assam.Core.Binary
             foreach (var tls in TlsCallbacksOf(binary))
                 if (IsCode(c, tls)) AddSeed(c, tls, null, "TLS 回呼");
             foreach (var e in binary.Exports.Where(x => x.ForwardTo == null).OrderBy(x => x.Address))
-                if (IsCode(c, e.Address)) AddSeed(c, e.Address, SafeName(e.DisplayName, e.Name == null ? "ordinal_" + e.Ordinal.ToString(CultureInfo.InvariantCulture) : null), "匯出函式");
+                if (IsCode(c, e.Address))
+                    AddSeed(c, e.Address, e.Name != null ? SafeName(e.Name, null) : "ordinal_" + e.Ordinal.ToString(CultureInfo.InvariantCulture), "匯出函式");
 
             Explore(c);
 
@@ -364,6 +365,7 @@ namespace Assam.Core.Binary
         {
             var r = c.Result;
             var b = c.Binary;
+            SplitFallThroughFunctions(c);
             var byOwner = new Dictionary<ulong, List<DecodedInstruction>>();
             foreach (var kv in c.Decoded)
             {
@@ -435,6 +437,28 @@ namespace Assam.Core.Binary
                 List<ulong> callees;
                 if (c.CalleesOf.TryGetValue(kv.Key, out callees)) f.Callees.AddRange(callees);
                 r.Functions.Add(f);
+            }
+        }
+
+        /// <summary>
+        /// 先追蹤的函式可能一路「流入」後來才發現的被呼叫位址（例如前一個函式結尾呼叫了不會返回的函式），
+        /// 這時從那個位址起連續的指令改歸新函式，讓每個被呼叫的位址都是獨立函式。
+        /// </summary>
+        private static void SplitFallThroughFunctions(Context c)
+        {
+            foreach (var seed in c.Seeds.Values.OrderBy(s => s.Start))
+            {
+                ulong owner;
+                if (!c.Owner.TryGetValue(seed.Start, out owner) || owner == seed.Start) continue;
+                ulong a = seed.Start;
+                DecodedInstruction ins;
+                ulong current;
+                while (c.Decoded.TryGetValue(a, out ins) && c.Owner.TryGetValue(a, out current) && current == owner)
+                {
+                    if (a != seed.Start && c.Seeds.ContainsKey(a)) break;
+                    c.Owner[a] = seed.Start;
+                    a += (ulong)Math.Max(1, ins.Length);
+                }
             }
         }
 
@@ -646,7 +670,14 @@ namespace Assam.Core.Binary
             label = "str_" + Hex(b, address);
             data.Labels[address] = label;
             var sb = new StringBuilder();
-            sb.Append(label).Append(' ').Append(encoding == "UTF-16" ? "dw " : "db ");
+            if (encoding == "UTF-16")
+            {
+                // 寬字元字串：每個字一個 word（dw "ab" 在 MASM 會把兩個字元塞進同一個 word，所以逐字寫出）
+                var chars = s.Select(ch => ch >= 0x20 && ch < 0x7F && ch != '\'' ? "'" + ch + "'" : "0x" + ((int)ch).ToString("X4", CultureInfo.InvariantCulture));
+                data.Definitions[address] = label + " dw " + string.Join(", ", chars.Concat(new[] { "0" })) + "        ; L\"" + Shorten(s) + "\"";
+                return label;
+            }
+            sb.Append(label).Append(" db ");
             var parts = new List<string>();
             var run = new StringBuilder();
             foreach (char ch in s)
