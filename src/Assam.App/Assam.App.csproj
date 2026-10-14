@@ -49,6 +49,9 @@
     <Compile Include="MainForm.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Pages\DisassemblyPage.cs">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Pages\ChatPage.cs">
       <SubType>Code</SubType>
     </Compile>

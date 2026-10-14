@@ -146,20 +146,42 @@ namespace Assam.App
             return s;
         }
 
-        /// <summary>SplitContainer 要在有實際大小之後才能設定 SplitterDistance。</summary>
+        /// <summary>
+        /// 依比例設定分隔線位置。.NET Framework 會在 SplitterDistance 超出
+        /// [Panel1MinSize, 寬(高) - Panel2MinSize - SplitterWidth] 時丟出例外，
+        /// 而版面配置初期容器可能只有幾個像素，所以要等到大小足夠才設定，設定成功後就不再處理
+        /// （FixedPanel = None 時，之後視窗縮放會自動維持比例）。
+        /// </summary>
         public static void ApplySplitter(SplitContainer s, double ratio)
         {
+            bool applied = false;
             EventHandler apply = null;
             apply = (sender, e) =>
             {
+                if (applied) return;
                 int total = s.Orientation == Orientation.Vertical ? s.Width : s.Height;
-                if (total <= 0) return;
-                int d = (int)(total * ratio);
-                d = Math.Max(s.Panel1MinSize, Math.Min(total - s.Panel2MinSize - s.SplitterWidth, d));
-                if (d > 0) s.SplitterDistance = d;
+                int min = s.Panel1MinSize;
+                int max = total - s.Panel2MinSize - s.SplitterWidth;
+                if (max - min < 40) return; // 容器還太小，等下一次大小改變
+                int d = Math.Max(min, Math.Min(max, (int)Math.Round(total * ratio)));
+                try
+                {
+                    s.SplitterDistance = d;
+                    applied = true;
+                }
+                catch (InvalidOperationException)
+                {
+                    return; // 版面仍在調整中，下次再試
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    return;
+                }
                 s.SizeChanged -= apply;
+                s.HandleCreated -= apply;
             };
             s.SizeChanged += apply;
+            s.HandleCreated += apply;
         }
 
         public static DataGridView Grid()

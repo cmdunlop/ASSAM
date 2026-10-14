@@ -50,6 +50,16 @@
     <Compile Include="Assistant\CodeExtractor.cs" />
     <Compile Include="Assistant\IntentClassifier.cs" />
     <Compile Include="Assistant\NumberRequestParser.cs" />
+    <Compile Include="Binary\BinaryLoader.cs" />
+    <Compile Include="Binary\BinaryModels.cs" />
+    <Compile Include="Binary\CilDisassembler.cs" />
+    <Compile Include="Binary\CilModels.cs" />
+    <Compile Include="Binary\ClrMetadataReader.cs" />
+    <Compile Include="Binary\DecodedInstruction.cs" />
+    <Compile Include="Binary\Disassembler.cs" />
+    <Compile Include="Binary\DisassemblyModels.cs" />
+    <Compile Include="Binary\X86Decoder.cs" />
+    <Compile Include="Binary\X86OpcodeTables.cs" />
     <Compile Include="Derivation\NumberDerivation.cs" />
     <Compile Include="Instructions\InstructionInfo.cs" />
     <Compile Include="Instructions\InstructionSet.cs" />

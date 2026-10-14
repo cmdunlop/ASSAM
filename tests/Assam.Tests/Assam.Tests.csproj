@@ -40,15 +40,23 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AnalysisTests.cs" />
+    <Compile Include="BinaryLoaderTests.cs" />
+    <Compile Include="CilDisassemblerTests.cs" />
+    <Compile Include="DisassemblerTests.cs" />
     <Compile Include="DerivationTests.cs" />
     <Compile Include="KnowledgeAndAssistantTests.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SimulatorTests.cs" />
     <Compile Include="TestFramework.cs" />
+    <Compile Include="X86DecoderTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <!-- 測試用的 EXE/DLL/COM（原始碼在 TestData\src，用 build.sh 重新產生），建置時複製到輸出資料夾 -->
+    <None Include="TestData\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Assam.Core\Assam.Core.csproj">
