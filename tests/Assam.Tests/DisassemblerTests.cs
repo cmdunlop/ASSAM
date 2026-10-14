@@ -142,7 +142,7 @@ namespace Assam.Tests
             Assert.Contains(".data", source);
             Assert.Contains(".code", source);
 
-            var memory = new UserMemoryData();
+            var memory = UserMemoryData.CreateNew();
             var explainer = new CodeExplainer(new ArchitectureDetector(() => memory));
             var explained = explainer.Explain(source);
             Assert.True(explained.Arch == AsmArch.X86Intel, "應辨識為 x86 Intel 語法：" + explained.Arch);
